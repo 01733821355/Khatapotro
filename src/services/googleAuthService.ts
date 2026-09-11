@@ -19,8 +19,13 @@ declare global {
   }
 }
 
+import firebaseConfig from '../../firebase-applet-config.json';
+
 // OAuth client ID for KhataPotro Google Services
-export const GOOGLE_CLIENT_ID = '801351587399-mn7anb1ufddcnvem919g9tp6cfkm3un0.apps.googleusercontent.com';
+export const GOOGLE_CLIENT_ID = 
+  (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID ||
+  firebaseConfig.oAuthClientId || 
+  '689412959744-qs3g09bcc1gq8oo0isf3vli3vr309or2.apps.googleusercontent.com';
 
 export const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/userinfo.profile',
