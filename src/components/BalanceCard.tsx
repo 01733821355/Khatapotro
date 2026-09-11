@@ -9,6 +9,9 @@ interface BalanceCardProps {
   todayExpense: number;
   dailyExpenseLimit?: DailyExpenseLimit;
   onOpenDailyLimitModal?: () => void;
+  onOpenIncomeList?: () => void;
+  onOpenExpenseList?: () => void;
+  onOpenAllTransactions?: () => void;
   userName?: string;
   language: Language;
 }
@@ -20,6 +23,9 @@ export const BalanceCard = ({
   todayExpense,
   dailyExpenseLimit,
   onOpenDailyLimitModal,
+  onOpenIncomeList,
+  onOpenExpenseList,
+  onOpenAllTransactions,
   userName = 'Bappy',
   language,
 }: BalanceCardProps) => {
@@ -93,30 +99,63 @@ export const BalanceCard = ({
       {/* Main Gradient Card matching screenshot with #3B50DF to #5C32E6 */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#3B50DF] to-[#5C32E6] text-white p-6 sm:p-7 shadow-xl shadow-indigo-600/20">
         <div className="relative z-10">
-          {/* Top: Total Balance */}
-          <div>
-            <p className="text-xs sm:text-sm font-medium text-white/80">
-              {labels.totalBalance}
-            </p>
-            <h3 className="text-3xl sm:text-4xl font-extrabold tracking-tight mt-1 text-white">
+          {/* Top: Total Balance (Clickable) */}
+          <div 
+            onClick={onOpenAllTransactions}
+            className="cursor-pointer group/balance transition-transform active:scale-[0.99]"
+            title={language === 'bn' ? 'সকল লেনদেনের তালিকা ও এডিট করতে ক্লিক করুন' : 'Click to view and edit all transactions'}
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-xs sm:text-sm font-medium text-white/85 flex items-center gap-1.5">
+                <span>{labels.totalBalance}</span>
+                <span className="text-[10px] bg-white/20 hover:bg-white/30 px-2 py-0.5 rounded-full text-white font-normal transition-colors">
+                  {language === 'bn' ? 'সব দেখুন ও এডিট ↗' : 'View & Edit ↗'}
+                </span>
+              </p>
+            </div>
+            <h3 className="text-3xl sm:text-4xl font-extrabold tracking-tight mt-1 text-white group-hover/balance:opacity-95">
               {formatCurrency(totalBalance, language)}
             </h3>
           </div>
 
           {/* Thin separator */}
-          <div className="my-5 border-t border-white/20" />
+          <div className="my-4 border-t border-white/20" />
 
-          {/* Bottom row: Month Income (left) and Month Expense (right) */}
-          <div className="flex items-center justify-between text-xs sm:text-sm font-semibold">
-            <div className="text-emerald-300">
-              <span>{labels.monthIncome} </span>
-              <span className="font-bold">{formatCurrency(monthIncome, language)}</span>
-            </div>
+          {/* Bottom row: Month Income (left) and Month Expense (right) as Interactive Clickable Cards */}
+          <div className="grid grid-cols-2 gap-2.5 text-xs sm:text-sm font-semibold">
+            <button
+              type="button"
+              onClick={onOpenIncomeList}
+              className="text-left bg-white/10 hover:bg-white/20 active:scale-[0.98] p-2.5 sm:p-3 rounded-2xl border border-white/15 transition-all text-emerald-200 group"
+              title={language === 'bn' ? 'মোট জমার বিস্তারিত তালিকা ও এডিট করতে ক্লিক করুন' : 'View and edit income entries'}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-white/80 text-[11px] sm:text-xs">{labels.monthIncome}</span>
+                <span className="text-[10px] bg-emerald-500/30 text-emerald-100 px-1.5 py-0.5 rounded group-hover:bg-emerald-500/50 transition-colors">
+                  {language === 'bn' ? 'জমা তালিকা ↗' : 'Income List ↗'}
+                </span>
+              </div>
+              <div className="text-sm sm:text-base font-extrabold text-white mt-1">
+                {formatCurrency(monthIncome, language)}
+              </div>
+            </button>
 
-            <div className="text-rose-200">
-              <span>{labels.monthExpense} </span>
-              <span className="font-bold">{formatCurrency(monthExpense, language)}</span>
-            </div>
+            <button
+              type="button"
+              onClick={onOpenExpenseList}
+              className="text-left bg-white/10 hover:bg-white/20 active:scale-[0.98] p-2.5 sm:p-3 rounded-2xl border border-white/15 transition-all text-rose-200 group"
+              title={language === 'bn' ? 'মোট খরচের বিস্তারিত তালিকা ও এডিট করতে ক্লিক করুন' : 'View and edit expense entries'}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-white/80 text-[11px] sm:text-xs">{labels.monthExpense}</span>
+                <span className="text-[10px] bg-rose-500/30 text-rose-100 px-1.5 py-0.5 rounded group-hover:bg-rose-500/50 transition-colors">
+                  {language === 'bn' ? 'খরচ তালিকা ↗' : 'Expense List ↗'}
+                </span>
+              </div>
+              <div className="text-sm sm:text-base font-extrabold text-white mt-1">
+                {formatCurrency(monthExpense, language)}
+              </div>
+            </button>
           </div>
         </div>
       </div>

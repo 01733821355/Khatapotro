@@ -8,13 +8,15 @@ import {
   Banknote,
   Smartphone,
   Building,
-  Coins
+  Coins,
+  Pencil
 } from 'lucide-react';
 import type { Transaction, Language } from '../types';
 import { formatCurrency } from '../utils/formatters';
 
 interface RecentTransactionsProps {
   transactions: Transaction[];
+  onEditTransaction?: (tx: Transaction) => void;
   onDeleteTransaction: (id: string) => void;
   onViewReceipt?: (docId: string) => void;
   onViewAll?: () => void;
@@ -23,6 +25,7 @@ interface RecentTransactionsProps {
 
 export const RecentTransactions = ({
   transactions,
+  onEditTransaction,
   onDeleteTransaction,
   onViewReceipt,
   onViewAll,
@@ -32,9 +35,10 @@ export const RecentTransactions = ({
 
   const t = {
     title: language === 'bn' ? 'সর্বশেষ লেনদেন' : 'Recent Transactions',
-    viewAll: language === 'bn' ? 'সব দেখুন' : 'View All',
+    viewAll: language === 'bn' ? 'সব দেখুন ও এডিট' : 'View All & Edit',
     confirmDelete: language === 'bn' ? 'আপনি কি নিশ্চিত এই এন্ট্রি মুছে ফেলতে চান?' : 'Are you sure you want to delete this entry?',
     delete: language === 'bn' ? 'মুছুন' : 'Delete',
+    edit: language === 'bn' ? 'এডিট' : 'Edit',
     cancel: language === 'bn' ? 'বাতিল' : 'Cancel',
     receipt: language === 'bn' ? 'রসিদ' : 'Receipt',
     empty: language === 'bn' ? 'কোন লেনদেন পাওয়া যায়নি' : 'No transactions recorded yet',
@@ -110,8 +114,8 @@ export const RecentTransactions = ({
                   </div>
                 </div>
 
-                {/* Right: Amount in bold color matching photo */}
-                <div className="flex items-center gap-2 shrink-0">
+                {/* Right: Amount and Actions */}
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                   <span
                     className={`font-bold text-sm sm:text-base ${
                       isExpense ? 'text-rose-600' : 'text-emerald-600'
@@ -121,11 +125,23 @@ export const RecentTransactions = ({
                     {formatCurrency(tx.amount, language)}
                   </span>
 
-                  {/* Delete Button on hover */}
+                  {/* Edit Button */}
+                  {onEditTransaction && (
+                    <button
+                      type="button"
+                      onClick={() => onEditTransaction(tx)}
+                      className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-all"
+                      title={t.edit}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
+                  {/* Delete Button */}
                   <button
                     type="button"
                     onClick={() => setDeleteConfirmId(tx.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-all"
+                    className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-all"
                     title={t.delete}
                   >
                     <Trash2 className="w-3.5 h-3.5" />

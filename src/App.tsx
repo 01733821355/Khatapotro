@@ -49,6 +49,7 @@ import { LendingPage } from './components/LendingPage';
 import { FloatingNav } from './components/FloatingNav';
 import { FirstTimeRegistrationModal } from './components/FirstTimeRegistrationModal';
 import { DeleteAllDataModal } from './components/DeleteAllDataModal';
+import { TransactionsLedgerModal } from './components/TransactionsLedgerModal';
 import type { ActivePage } from './types';
 
 import { 
@@ -90,6 +91,8 @@ export default function App() {
   // Modals
   const [isAddTxOpen, setIsAddTxOpen] = useState(false);
   const [addTxDefaultType, setAddTxDefaultType] = useState<TransactionType>('expense');
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [ledgerInitialFilter, setLedgerInitialFilter] = useState<'all' | 'income' | 'expense' | 'debt' | 'lending'>('all');
   const [isDailyLimitModalOpen, setIsDailyLimitModalOpen] = useState(false);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [isAllTxModalOpen, setIsAllTxModalOpen] = useState(false);
@@ -98,8 +101,6 @@ export default function App() {
     return !storageService.getUserProfile() && !storageService.isInitialized();
   });
   const [isDeleteAllModalOpen, setIsDeleteAllModalOpen] = useState(false);
-  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | null>(null);
-  const [searchTxQuery, setSearchTxQuery] = useState('');
 
   // Show auto-dismissing toast
   const showToast = useCallback((text: string, type: 'success' | 'error' = 'success') => {
@@ -645,6 +646,84 @@ export default function App() {
     }
   };
 
+  // Update Existing Transaction
+  const handleUpdateTransaction = async (
+    updatedTx: Transaction,
+    newFileToUpload?: { file: File; title: string; category: DocumentCategory }
+  ) => {
+    let receiptDocId: string | undefined = updatedTx.receiptDocId;
+
+    if (newFileToUpload) {
+      try {
+        let fileDataUrl: string | undefined = undefined;
+        try {
+          fileDataUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = () => resolve('');
+            reader.readAsDataURL(newFileToUpload.file);
+          });
+        } catch {
+          // fallback
+        }
+
+        let driveResult: { fileId: string; webViewLink?: string; webContentLink?: string } | null = null;
+        if (token) {
+          driveResult = await uploadDocumentToDrive(
+            token,
+            newFileToUpload.file,
+            newFileToUpload.file.name,
+            newFileToUpload.category,
+            updatedTx.amount
+          );
+        }
+
+        const newDoc: CloudDocument = {
+          id: `doc_${Date.now()}`,
+          title: newFileToUpload.title || newFileToUpload.file.name,
+          docCategory: newFileToUpload.category,
+          fileName: newFileToUpload.file.name,
+          fileSize: newFileToUpload.file.size,
+          fileType: newFileToUpload.file.type,
+          uploadDate: new Date().toISOString(),
+          driveFileId: driveResult?.fileId,
+          driveViewLink: driveResult?.webViewLink,
+          driveDownloadLink: driveResult?.webContentLink,
+          fileDataUrl,
+          amount: updatedTx.amount,
+          syncedToDrive: Boolean(driveResult?.fileId),
+          syncedToSheets: false,
+        };
+
+        setDocuments((prev) => [newDoc, ...prev]);
+        receiptDocId = newDoc.id;
+      } catch (err) {
+        console.warn('Voucher upload failed, proceeding with update:', err);
+      }
+    }
+
+    const modified: Transaction = {
+      ...updatedTx,
+      receiptDocId,
+      syncedToSheets: false,
+    };
+
+    const updatedList = transactions.map((t) => (t.id === modified.id ? modified : t));
+    setTransactions(updatedList);
+    setEditingTransaction(null);
+
+    showToast(
+      language === 'bn'
+        ? 'লেনদেনের তথ্য সফলভাবে আপডেট করা হয়েছে!'
+        : 'Transaction updated successfully!'
+    );
+
+    if (token && sheetConfig.spreadsheetId && sheetConfig.autoSync) {
+      syncAllToSheet(token, sheetConfig.spreadsheetId, updatedList, inventory, inventoryLogs, documents)
+        .catch(console.warn);
+    }
+  };
+
   // Delete Transaction
   const handleDeleteTransaction = (id: string) => {
     const updated = transactions.filter((t) => t.id !== id);
@@ -809,19 +888,6 @@ export default function App() {
     }
   };
 
-  // Filtered transactions for the All Transactions modal
-  const filteredAllTransactions = useMemo(() => {
-    return transactions.filter((tx) => {
-      const matchCategory = !selectedCategoryFilter || tx.category === selectedCategoryFilter;
-      const matchSearch =
-        !searchTxQuery.trim() ||
-        tx.title.toLowerCase().includes(searchTxQuery.toLowerCase()) ||
-        tx.category.toLowerCase().includes(searchTxQuery.toLowerCase()) ||
-        (tx.notes && tx.notes.toLowerCase().includes(searchTxQuery.toLowerCase()));
-      return matchCategory && matchSearch;
-    });
-  }, [transactions, selectedCategoryFilter, searchTxQuery]);
-
   // Recent 5 transactions matching user's photo
   const recentTransactionsList = useMemo(() => {
     return transactions.slice(0, 5);
@@ -897,6 +963,18 @@ export default function App() {
               todayExpense={todayExpense}
               dailyExpenseLimit={dailyExpenseLimit}
               onOpenDailyLimitModal={() => setIsDailyLimitModalOpen(true)}
+              onOpenAllTransactions={() => {
+                setLedgerInitialFilter('all');
+                setIsAllTxModalOpen(true);
+              }}
+              onOpenIncomeList={() => {
+                setLedgerInitialFilter('income');
+                setIsAllTxModalOpen(true);
+              }}
+              onOpenExpenseList={() => {
+                setLedgerInitialFilter('expense');
+                setIsAllTxModalOpen(true);
+              }}
               userName={userProfile?.name?.split(' ')[0] || user?.displayName?.split(' ')[0] || 'Bappy'}
               language={language}
             />
@@ -904,15 +982,20 @@ export default function App() {
             {/* 2. 5 Quick Action Buttons (Exact match with photo: জমা, খরচ, রিপোর্ট, ক্যাটাগরি, সেটিংস) */}
             <QuickActions
               onAddIncome={() => {
+                setEditingTransaction(null);
                 setAddTxDefaultType('income');
                 setIsAddTxOpen(true);
               }}
               onAddExpense={() => {
+                setEditingTransaction(null);
                 setAddTxDefaultType('expense');
                 setIsAddTxOpen(true);
               }}
               onOpenReports={() => setActivePage('report')}
-              onOpenCategories={() => setIsAllTxModalOpen(true)}
+              onOpenCategories={() => {
+                setLedgerInitialFilter('all');
+                setIsAllTxModalOpen(true);
+              }}
               onOpenSettings={() => setIsSyncModalOpen(true)}
               language={language}
             />
@@ -968,12 +1051,19 @@ export default function App() {
               </button>
             </div>
 
-            {/* 4. সর্বশেষ লেনদেন (Recent Transactions with "সব দেখুন") */}
+            {/* 4. সর্বশেষ লেনদেন (Recent Transactions with "সব দেখুন ও এডিট") */}
             <RecentTransactions
               transactions={recentTransactionsList}
+              onEditTransaction={(tx) => {
+                setEditingTransaction(tx);
+                setIsAddTxOpen(true);
+              }}
               onDeleteTransaction={handleDeleteTransaction}
               onViewReceipt={(docId) => setActivePage('vault')}
-              onViewAll={() => setActivePage('report')}
+              onViewAll={() => {
+                setLedgerInitialFilter('all');
+                setIsAllTxModalOpen(true);
+              }}
               language={language}
             />
 
@@ -1011,6 +1101,11 @@ export default function App() {
             userName={user?.displayName?.split(' ')[0] || 'Bappy'}
             language={language}
             onViewReceipt={(docId) => setActivePage('vault')}
+            onEditTransaction={(tx) => {
+              setEditingTransaction(tx);
+              setIsAddTxOpen(true);
+            }}
+            onDeleteTransaction={handleDeleteTransaction}
           />
         )}
 
@@ -1065,10 +1160,12 @@ export default function App() {
         activePage={activePage}
         onNavigate={(p) => setActivePage(p)}
         onOpenAddIncome={() => {
+          setEditingTransaction(null);
           setAddTxDefaultType('income');
           setIsAddTxOpen(true);
         }}
         onOpenAddExpense={() => {
+          setEditingTransaction(null);
           setAddTxDefaultType('expense');
           setIsAddTxOpen(true);
         }}
@@ -1084,13 +1181,18 @@ export default function App() {
         </p>
       </footer>
 
-      {/* Add Transaction Modal (+ জমা / - খরচ) */}
+      {/* Add / Edit Transaction Modal (+ জমা / - খরচ / এডিট) */}
       <AddTransactionModal
         isOpen={isAddTxOpen}
-        onClose={() => setIsAddTxOpen(false)}
+        onClose={() => {
+          setIsAddTxOpen(false);
+          setEditingTransaction(null);
+        }}
         defaultType={addTxDefaultType}
+        initialTransaction={editingTransaction}
         documents={documents}
         onAddTransaction={handleAddTransaction}
+        onUpdateTransaction={handleUpdateTransaction}
         language={language}
         dailyExpenseLimit={dailyExpenseLimit}
         todayExpense={todayExpense}
@@ -1132,142 +1234,29 @@ export default function App() {
         documentCount={documents.length}
       />
 
-      {/* All Transactions Modal (সব লেনদেন দেখুন) */}
-      {isAllTxModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150">
-            {/* Modal Header */}
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-base sm:text-lg text-slate-900">
-                  {language === 'bn' ? 'সকল লেনদেন ও ক্যাটাগরি' : 'All Transactions & Categories'}
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {language === 'bn'
-                    ? `মোট ${transactions.length} টি রেকর্ড সংরক্ষিত আছে`
-                    : `${transactions.length} total records logged`}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAllTxModalOpen(false);
-                  setSelectedCategoryFilter(null);
-                  setSearchTxQuery('');
-                }}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Filter / Search Bar */}
-            <div className="p-4 border-b border-slate-100 bg-slate-50/50 space-y-3">
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder={language === 'bn' ? 'লেনদেন খুঁজুন (নাম, ক্যাটাগরি বা নোট)...' : 'Search records...'}
-                  value={searchTxQuery}
-                  onChange={(e) => setSearchTxQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {/* Category Pills */}
-              <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto">
-                <button
-                  type="button"
-                  onClick={() => setSelectedCategoryFilter(null)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors ${
-                    !selectedCategoryFilter
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  {language === 'bn' ? 'সব' : 'All'}
-                </button>
-                {['বিল', 'অন্যান্য খরচ', 'যাতায়াত', 'খাবার', 'বাজার', 'অন্যান্য জমা'].map((cat) => (
-                  <button
-                    type="button"
-                    key={cat}
-                    onClick={() =>
-                      setSelectedCategoryFilter(selectedCategoryFilter === cat ? null : cat)
-                    }
-                    className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors ${
-                      selectedCategoryFilter === cat
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* List */}
-            <div className="flex-1 overflow-y-auto p-4 divide-y divide-slate-100">
-              {filteredAllTransactions.length === 0 ? (
-                <div className="py-10 text-center text-slate-400 text-xs sm:text-sm">
-                  {language === 'bn' ? 'কোনো লেনদেন পাওয়া যায়নি' : 'No records found'}
-                </div>
-              ) : (
-                filteredAllTransactions.map((tx) => {
-                  const isExpense = tx.type === 'expense';
-                  return (
-                    <div
-                      key={tx.id}
-                      className="py-3 flex items-center justify-between gap-3 hover:bg-slate-50 px-2 rounded-2xl transition-colors group"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div
-                          className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-                            isExpense
-                              ? 'bg-rose-100 text-rose-500'
-                              : 'bg-amber-100 text-amber-600'
-                          }`}
-                        >
-                          {isExpense ? (
-                            <ArrowUp className="w-4 h-4 stroke-[2.5]" />
-                          ) : (
-                            <Coins className="w-4 h-4" />
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-bold text-sm text-slate-900 truncate">{tx.title}</p>
-                          <p className="text-xs text-slate-400">
-                            {tx.date} | {tx.category} • {tx.paymentMethod}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span
-                          className={`font-bold text-sm ${
-                            isExpense ? 'text-rose-600' : 'text-emerald-600'
-                          }`}
-                        >
-                          {isExpense ? '-' : '+'}
-                          {formatCurrency(tx.amount, language)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteTransaction(tx.id)}
-                          className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* All Transactions & Total Deposit/Expense Ledger Modal */}
+      <TransactionsLedgerModal
+        isOpen={isAllTxModalOpen}
+        onClose={() => setIsAllTxModalOpen(false)}
+        transactions={transactions}
+        documents={documents}
+        onEditTransaction={(tx) => {
+          setEditingTransaction(tx);
+          setIsAddTxOpen(true);
+        }}
+        onDeleteTransaction={handleDeleteTransaction}
+        onAddNewTransaction={(type) => {
+          setEditingTransaction(null);
+          setAddTxDefaultType(type);
+          setIsAddTxOpen(true);
+        }}
+        onViewReceipt={(docId) => {
+          setIsAllTxModalOpen(false);
+          setActivePage('vault');
+        }}
+        initialFilter={ledgerInitialFilter}
+        language={language}
+      />
 
       {/* Cloud Document Vault Modal (ডকুমেন্ট ও রসিদ) */}
       {isDocsModalOpen && (

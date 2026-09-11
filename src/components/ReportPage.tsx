@@ -8,11 +8,13 @@ import {
   Calendar, 
   ArrowDownLeft, 
   ArrowUpRight, 
-  Filter,
-  CheckCircle2,
-  ExternalLink,
-  Printer,
-  ChevronDown
+  Filter, 
+  CheckCircle2, 
+  ExternalLink, 
+  Printer, 
+  ChevronDown,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 
 interface ReportPageProps {
@@ -20,6 +22,8 @@ interface ReportPageProps {
   userName?: string;
   language: Language;
   onViewReceipt?: (docId?: string) => void;
+  onEditTransaction?: (tx: Transaction) => void;
+  onDeleteTransaction?: (id: string) => void;
 }
 
 export const ReportPage = ({
@@ -27,6 +31,8 @@ export const ReportPage = ({
   userName = 'Bappy',
   language,
   onViewReceipt,
+  onEditTransaction,
+  onDeleteTransaction,
 }: ReportPageProps) => {
   // Filter states
   const [startDate, setStartDate] = useState<string>('');
@@ -34,6 +40,7 @@ export const ReportPage = ({
   const [selectedType, setSelectedType] = useState<string>('সব');
   const [selectedCategory, setSelectedCategory] = useState<string>('সব');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Extract all available categories from transactions
   const availableCategories = useMemo(() => {
@@ -349,12 +356,13 @@ export const ReportPage = ({
                 <th className="py-2.5 px-3 text-right whitespace-nowrap">জমা</th>
                 <th className="py-2.5 px-3 text-right whitespace-nowrap">খরচ</th>
                 <th className="py-2.5 px-2 text-center whitespace-nowrap">প্রমাণ</th>
+                <th className="py-2.5 px-3 text-center whitespace-nowrap">অ্যাকশন</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredTransactions.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-400 font-medium">
+                  <td colSpan={8} className="py-8 text-center text-slate-400 font-medium">
                     কোনো লেনদেন পাওয়া যায়নি
                   </td>
                 </tr>
@@ -418,6 +426,32 @@ export const ReportPage = ({
                           '-'
                         )}
                       </td>
+
+                      {/* অ্যাকশন (Edit & Delete) */}
+                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1">
+                          {onEditTransaction && (
+                            <button
+                              type="button"
+                              onClick={() => onEditTransaction(tx)}
+                              className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="এডিট করুন"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {onDeleteTransaction && (
+                            <button
+                              type="button"
+                              onClick={() => setDeleteConfirmId(tx.id)}
+                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="মুছে ফেলুন"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })
@@ -425,6 +459,41 @@ export const ReportPage = ({
             </tbody>
           </table>
         </div>
+
+        {/* Delete Confirmation Popup */}
+        {deleteConfirmId && (
+          <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-sm w-full p-5 border border-slate-200 shadow-2xl animate-in zoom-in-95 duration-150">
+              <h4 className="font-bold text-slate-900 text-base mb-2">
+                আপনি কি নিশ্চিত এই এন্ট্রি মুছে ফেলতে চান?
+              </h4>
+              <p className="text-xs text-slate-500 mb-5 leading-relaxed">
+                এই লেনদেনটি মুছে ফেললে তা গুগল শিট ও হিসাব থেকে স্থায়ীভাবে সরানো হবে।
+              </p>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmId(null)}
+                  className="px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  বাতিল
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (deleteConfirmId && onDeleteTransaction) {
+                      onDeleteTransaction(deleteConfirmId);
+                    }
+                    setDeleteConfirmId(null);
+                  }}
+                  className="px-3.5 py-1.5 text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 rounded-xl transition-colors shadow-xs"
+                >
+                  মুছুন
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Footer info strictly matching user photo */}
         <div className="mt-4 pt-3 border-t border-slate-200 text-right space-y-1">

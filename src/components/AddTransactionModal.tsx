@@ -1,16 +1,43 @@
-import { useState, useEffect, type FormEvent } from 'react';
-import { PlusCircle, MinusCircle, X, Paperclip, User, AlertTriangle } from 'lucide-react';
-import type { Transaction, TransactionType, PaymentMethod, CloudDocument, Language, TransactionBadge, DailyExpenseLimit } from '../types';
+import { useState, useEffect, useRef, type FormEvent, type ChangeEvent } from 'react';
+import { 
+  PlusCircle, 
+  MinusCircle, 
+  X, 
+  Paperclip, 
+  User, 
+  AlertTriangle, 
+  Upload, 
+  Image as ImageIcon, 
+  FileText, 
+  Check, 
+  Pencil,
+  Trash2
+} from 'lucide-react';
+import type { 
+  Transaction, 
+  TransactionType, 
+  PaymentMethod, 
+  CloudDocument, 
+  Language, 
+  TransactionBadge, 
+  DailyExpenseLimit,
+  DocumentCategory 
+} from '../types';
 import { formatCurrency } from '../utils/formatters';
 
 interface AddTransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  defaultType: TransactionType;
+  defaultType?: TransactionType;
+  initialTransaction?: Transaction | null;
   documents: CloudDocument[];
   onAddTransaction: (
     tx: Omit<Transaction, 'id' | 'syncedToSheets'>,
-    newFileToUpload?: { file: File; title: string; category: any }
+    newFileToUpload?: { file: File; title: string; category: DocumentCategory }
+  ) => Promise<void>;
+  onUpdateTransaction?: (
+    tx: Transaction,
+    newFileToUpload?: { file: File; title: string; category: DocumentCategory }
   ) => Promise<void>;
   language: Language;
   dailyExpenseLimit?: DailyExpenseLimit;
@@ -24,37 +51,76 @@ const PAYMENT_METHODS: PaymentMethod[] = ['Cash', 'bKash', 'Nagad', 'Rocket', 'B
 export const AddTransactionModal = ({
   isOpen,
   onClose,
-  defaultType,
+  defaultType = 'expense',
+  initialTransaction,
   documents,
   onAddTransaction,
+  onUpdateTransaction,
   language,
   dailyExpenseLimit,
   todayExpense = 0,
 }: AddTransactionModalProps) => {
-  const [type, setType] = useState<TransactionType>(defaultType);
-  const [title, setTitle] = useState('');
-  const [personName, setPersonName] = useState('');
-  const [amount, setAmount] = useState<number | ''>('');
-  const [category, setCategory] = useState(defaultType === 'income' ? 'বেতন' : 'অন্যান্য খরচ');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Cash');
-  const [notes, setNotes] = useState('');
-  const [selectedDocId, setSelectedDocId] = useState<string>('');
+  const isEditing = Boolean(initialTransaction);
+
+  const [type, setType] = useState<TransactionType>(initialTransaction?.type || defaultType);
+  const [title, setTitle] = useState(initialTransaction?.title || '');
+  const [personName, setPersonName] = useState(initialTransaction?.personName || '');
+  const [amount, setAmount] = useState<number | ''>(initialTransaction ? initialTransaction.amount : '');
+  const [category, setCategory] = useState(
+    initialTransaction?.category || (defaultType === 'income' ? 'অন্যান্য জমা' : 'অন্যান্য খরচ')
+  );
+  const [date, setDate] = useState(initialTransaction?.date || new Date().toISOString().split('T')[0]);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(initialTransaction?.paymentMethod || 'Cash');
+  const [notes, setNotes] = useState(initialTransaction?.notes || '');
+  const [selectedDocId, setSelectedDocId] = useState<string>(initialTransaction?.receiptDocId || '');
+  
+  // Document upload state
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
+  const [docCategory, setDocCategory] = useState<DocumentCategory>('memo');
+  const [removeExistingDoc, setRemoveExistingDoc] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Sync state whenever modal is opened or defaultType changes
+  // Sync state whenever modal is opened or initialTransaction / defaultType changes
   useEffect(() => {
     if (isOpen) {
-      setType(defaultType);
-      setCategory(defaultType === 'income' ? 'অন্যান্য জমা' : 'অন্যান্য খরচ');
-      setTitle('');
-      setPersonName('');
-      setAmount('');
-      setNotes('');
-      setSelectedDocId('');
-      setDate(new Date().toISOString().split('T')[0]);
+      if (initialTransaction) {
+        setType(initialTransaction.type);
+        setTitle(initialTransaction.title);
+        setPersonName(initialTransaction.personName || '');
+        setAmount(initialTransaction.amount);
+        setCategory(initialTransaction.category);
+        setDate(initialTransaction.date);
+        setPaymentMethod(initialTransaction.paymentMethod || 'Cash');
+        setNotes(initialTransaction.notes || '');
+        setSelectedDocId(initialTransaction.receiptDocId || '');
+        setRemoveExistingDoc(false);
+      } else {
+        setType(defaultType);
+        setCategory(defaultType === 'income' ? 'অন্যান্য জমা' : 'অন্যান্য খরচ');
+        setTitle('');
+        setPersonName('');
+        setAmount('');
+        setNotes('');
+        setSelectedDocId('');
+        setDate(new Date().toISOString().split('T')[0]);
+        setRemoveExistingDoc(false);
+      }
+      setAttachedFile(null);
+      setFilePreviewUrl(null);
     }
-  }, [isOpen, defaultType]);
+  }, [isOpen, initialTransaction, defaultType]);
+
+  // Clean up object URLs to avoid memory leaks
+  useEffect(() => {
+    return () => {
+      if (filePreviewUrl) {
+        URL.revokeObjectURL(filePreviewUrl);
+      }
+    };
+  }, [filePreviewUrl]);
 
   if (!isOpen) return null;
 
@@ -67,6 +133,42 @@ export const AddTransactionModal = ({
 
   const categories = type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
 
+  // Handle file selection from camera/disk
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setAttachedFile(file);
+    setSelectedDocId(''); // Clear dropdown if uploading new file
+    setRemoveExistingDoc(false);
+
+    // Auto-detect doc category
+    if (type === 'income') {
+      setDocCategory('invoice');
+    } else {
+      setDocCategory('voucher');
+    }
+
+    // Generate preview for images
+    if (file.type.startsWith('image/')) {
+      const url = URL.createObjectURL(file);
+      setFilePreviewUrl(url);
+    } else {
+      setFilePreviewUrl(null);
+    }
+  };
+
+  const handleClearFile = () => {
+    setAttachedFile(null);
+    if (filePreviewUrl) {
+      URL.revokeObjectURL(filePreviewUrl);
+      setFilePreviewUrl(null);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !amount || Number(amount) <= 0) return;
@@ -77,36 +179,70 @@ export const AddTransactionModal = ({
 
       // Determine badge
       let badge: TransactionBadge = type === 'income' ? 'জমা' : 'খরচ';
-      if (category === 'ঋণ গ্রহণ' || category === 'ঋণ' || title.includes('ক্রেডিট কার্ড') || title.includes('আব্বু') && type === 'income') {
+      if (category === 'ঋণ গ্রহণ' || category === 'ঋণ' || title.includes('ক্রেডিট কার্ড') || (title.includes('আব্বু') && type === 'income')) {
         badge = 'দেনা';
       } else if (category === 'ধার প্রদান' || category === 'ধার') {
         badge = 'পাওনা';
       }
 
-      await onAddTransaction({
-        title: title.trim(),
-        amount: Number(amount),
-        type,
-        category,
-        date,
-        paymentMethod,
-        badge,
-        personName: personName.trim() || title.trim(),
-        notes: notes.trim() || undefined,
-        receiptDocId: selectedDocId || undefined,
-        receiptName: selectedDoc?.title || undefined,
-      });
+      let newFilePayload: { file: File; title: string; category: DocumentCategory } | undefined = undefined;
+      if (attachedFile) {
+        newFilePayload = {
+          file: attachedFile,
+          title: title.trim() + ' (' + (type === 'income' ? 'জমা রসিদ' : 'খরচ ভাউচার') + ')',
+          category: docCategory,
+        };
+      }
+
+      if (isEditing && initialTransaction && onUpdateTransaction) {
+        await onUpdateTransaction(
+          {
+            ...initialTransaction,
+            title: title.trim(),
+            amount: Number(amount),
+            type,
+            category,
+            date,
+            paymentMethod,
+            badge,
+            personName: personName.trim() || undefined,
+            notes: notes.trim() || undefined,
+            receiptDocId: removeExistingDoc ? undefined : selectedDocId || initialTransaction.receiptDocId,
+            receiptName: removeExistingDoc ? undefined : (selectedDoc?.title || initialTransaction.receiptName),
+          },
+          newFilePayload
+        );
+      } else {
+        await onAddTransaction(
+          {
+            title: title.trim(),
+            amount: Number(amount),
+            type,
+            category,
+            date,
+            paymentMethod,
+            badge,
+            personName: personName.trim() || title.trim(),
+            notes: notes.trim() || undefined,
+            receiptDocId: selectedDocId || undefined,
+            receiptName: selectedDoc?.title || undefined,
+          },
+          newFilePayload
+        );
+      }
 
       onClose();
     } catch (err) {
-      console.error('Failed to add transaction:', err);
+      console.error('Failed to save transaction:', err);
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const existingLinkedDoc = documents.find(d => d.id === (initialTransaction?.receiptDocId || selectedDocId));
 
   const t = {
+    editTitle: language === 'bn' ? 'এন্ট্রি এডিট / পরিবর্তন করুন' : 'Edit Transaction Entry',
     addIncome: language === 'bn' ? 'নতুন জমা (Income) যোগ করুন' : 'Record New Income',
     addExpense: language === 'bn' ? 'নতুন খরচ (Expense) যোগ করুন' : 'Record New Expense',
     titleLabel: language === 'bn' ? 'বিবরণ / নাম *' : 'Description / Title *',
@@ -116,26 +252,31 @@ export const AddTransactionModal = ({
     dateLabel: language === 'bn' ? 'তারিখ' : 'Date',
     paymentLabel: language === 'bn' ? 'পেমেন্ট মাধ্যম' : 'Payment Method',
     notesLabel: language === 'bn' ? 'নোট (ঐচ্ছিক)' : 'Notes (Optional)',
-    attachDocLabel: language === 'bn' ? 'ক্লাউড ডকুমেন্ট / রসিদ সংযুক্ত করুন' : 'Attach Cloud Document / Voucher',
-    noDocSelect: language === 'bn' ? '-- কোনো রসিদ সংযুক্ত নয় --' : '-- No document attached --',
+    attachDocLabel: language === 'bn' ? 'রসিদ / মেমো / চালান সংযুক্ত করুন (ছবি বা PDF)' : 'Attach Receipt / Voucher / Memo (Image or PDF)',
+    uploadDocPrompt: language === 'bn' ? 'ক্যামেরা বা ফাইল থেকে ছবি / PDF নির্বাচন করুন' : 'Choose photo from Camera or File (Image / PDF)',
+    noDocSelect: language === 'bn' ? '-- পূর্বে আপলোড করা ডকুমেন্ট থেকে বেছে নিন --' : '-- Choose from existing documents --',
     cancel: language === 'bn' ? 'বাতিল' : 'Cancel',
-    save: language === 'bn' ? 'সংরক্ষণ করুন' : 'Save Entry',
+    save: isEditing 
+      ? (language === 'bn' ? 'পরিবর্তন সংরক্ষণ করুন' : 'Update Entry')
+      : (language === 'bn' ? 'সংরক্ষণ করুন' : 'Save Entry'),
     saving: language === 'bn' ? 'সংরক্ষণ হচ্ছে...' : 'Saving...',
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl max-w-md w-full p-6 border border-slate-200 shadow-2xl animate-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+      <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 border border-slate-200 shadow-2xl animate-in zoom-in-95 duration-150 max-h-[92vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div className="flex items-center gap-2">
-            {type === 'income' ? (
+            {isEditing ? (
+              <Pencil className="w-5 h-5 text-blue-600" />
+            ) : type === 'income' ? (
               <PlusCircle className="w-5 h-5 text-emerald-600" />
             ) : (
               <MinusCircle className="w-5 h-5 text-rose-600" />
             )}
             <h3 className="font-bold text-base sm:text-lg text-slate-900">
-              {type === 'income' ? t.addIncome : t.addExpense}
+              {isEditing ? t.editTitle : type === 'income' ? t.addIncome : t.addExpense}
             </h3>
           </div>
           <button
@@ -220,7 +361,7 @@ export const AddTransactionModal = ({
               className="w-full px-3 py-2 text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
 
-            {/* Proactive warning if adding this expense exceeds daily limit */}
+            {/* Warning if adding this expense exceeds daily limit */}
             {type === 'expense' &&
               dailyExpenseLimit?.enabled &&
               Number(amount) > 0 &&
@@ -235,8 +376,8 @@ export const AddTransactionModal = ({
                     </p>
                     <p className="text-[11px] text-amber-700 mt-0.5">
                       {language === 'bn'
-                        ? `আজকের খরচ দাঁড়াবে ${formatCurrency(todayExpense + Number(amount), language)}, যা আপনার দৈনিক লিমিট (${formatCurrency(dailyExpenseLimit.amount, language)}) থেকে ${formatCurrency(todayExpense + Number(amount) - dailyExpenseLimit.amount, language)} বেশি।`
-                        : `Total today will be ${formatCurrency(todayExpense + Number(amount), language)}, which exceeds your limit by ${formatCurrency(todayExpense + Number(amount) - dailyExpenseLimit.amount, language)}.`}
+                        ? `আজকের মোট খরচ দাঁড়াবে ${formatCurrency(todayExpense + Number(amount), language)}, যা আপনার দৈনিক লিমিট (${formatCurrency(dailyExpenseLimit.amount, language)}) থেকে বেশি।`
+                        : `Total today will be ${formatCurrency(todayExpense + Number(amount), language)}, which exceeds your daily limit.`}
                     </p>
                   </div>
                 </div>
@@ -316,24 +457,121 @@ export const AddTransactionModal = ({
             </div>
           </div>
 
-          {/* Link Document */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1">
-              <Paperclip className="w-3.5 h-3.5 text-slate-400" />
-              <span>{t.attachDocLabel}</span>
-            </label>
-            <select
-              value={selectedDocId}
-              onChange={(e) => setSelectedDocId(e.target.value)}
-              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-            >
-              <option value="">{t.noDocSelect}</option>
-              {documents.map((doc) => (
-                <option key={doc.id} value={doc.id}>
-                  [{doc.docCategory}] {doc.title} ({doc.fileName})
-                </option>
-              ))}
-            </select>
+          {/* Direct Document / Voucher / Memo Attachment */}
+          <div className="p-3 bg-slate-50/80 rounded-2xl border border-slate-200 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <Paperclip className="w-3.5 h-3.5 text-blue-600" />
+                <span>{t.attachDocLabel}</span>
+              </label>
+              {attachedFile && (
+                <button
+                  type="button"
+                  onClick={handleClearFile}
+                  className="text-[11px] text-rose-600 hover:underline font-bold flex items-center gap-1"
+                >
+                  <X className="w-3 h-3" />
+                  <span>সরান</span>
+                </button>
+              )}
+            </div>
+
+            {/* Existing linked document indicator when editing */}
+            {existingLinkedDoc && !removeExistingDoc && !attachedFile && (
+              <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-blue-900 truncate">
+                      {existingLinkedDoc.title || existingLinkedDoc.fileName}
+                    </p>
+                    <p className="text-[10px] text-blue-600">
+                      সংযুক্ত রসিদ/ডকুমেন্ট ভল্টে সংরক্ষিত আছে
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRemoveExistingDoc(true);
+                    setSelectedDocId('');
+                  }}
+                  className="p-1 text-rose-600 hover:bg-rose-100 rounded-lg text-xs"
+                  title="রসিদ সংযোগ বিচ্ছিন্ন করুন"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Direct File Picker (Camera / Files) */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*,application/pdf"
+              onChange={handleFileChange}
+              className="hidden"
+              id="tx-file-input"
+            />
+
+            {!attachedFile ? (
+              <label
+                htmlFor="tx-file-input"
+                className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-xl cursor-pointer bg-white hover:bg-blue-50/40 transition-colors text-center"
+              >
+                <Upload className="w-5 h-5 text-slate-400 mb-1" />
+                <span className="text-xs font-bold text-blue-600">
+                  {t.uploadDocPrompt}
+                </span>
+                <span className="text-[10px] text-slate-400 mt-0.5">
+                  ক্যামেরার ছবি, ভাউচার, মেমো, ইনভয়েস বা PDF (সর্বোচ্চ 10MB)
+                </span>
+              </label>
+            ) : (
+              <div className="p-2.5 bg-white border border-emerald-200 rounded-xl flex items-center gap-3">
+                {filePreviewUrl ? (
+                  <img
+                    src={filePreviewUrl}
+                    alt="Preview"
+                    className="w-12 h-12 object-cover rounded-lg border border-slate-200 shrink-0"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                    <FileText className="w-6 h-6" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-slate-900 truncate">
+                    {attachedFile.name}
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    {(attachedFile.size / 1024).toFixed(1)} KB •{' '}
+                    <span className="text-emerald-600 font-bold">আপলোডের জন্য প্রস্তুত ✓</span>
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Option to choose from existing uploaded documents in the vault */}
+            {documents.length > 0 && !attachedFile && (
+              <div className="pt-1">
+                <select
+                  value={selectedDocId}
+                  onChange={(e) => {
+                    setSelectedDocId(e.target.value);
+                    setRemoveExistingDoc(false);
+                  }}
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-xl text-slate-700"
+                >
+                  <option value="">{t.noDocSelect}</option>
+                  {documents.map((doc) => (
+                    <option key={doc.id} value={doc.id}>
+                      [{doc.docCategory}] {doc.title} ({doc.fileName})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Notes */}
@@ -343,7 +581,7 @@ export const AddTransactionModal = ({
             </label>
             <input
               type="text"
-              placeholder="অতিরিক্ত কোনো তথ্য..."
+              placeholder="অতিরিক্ত কোনো তথ্য বা মন্তব্য..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
@@ -362,8 +600,12 @@ export const AddTransactionModal = ({
             <button
               type="submit"
               disabled={isSubmitting || !amount || !title}
-              className={`px-4 py-2 text-xs font-bold text-white rounded-xl shadow-xs transition-colors disabled:opacity-50 ${
-                type === 'income' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'
+              className={`px-5 py-2 text-xs font-bold text-white rounded-xl shadow-xs transition-colors disabled:opacity-50 ${
+                isEditing
+                  ? 'bg-blue-600 hover:bg-blue-700'
+                  : type === 'income'
+                  ? 'bg-emerald-600 hover:bg-emerald-700'
+                  : 'bg-rose-600 hover:bg-rose-700'
               }`}
             >
               {isSubmitting ? t.saving : t.save}
