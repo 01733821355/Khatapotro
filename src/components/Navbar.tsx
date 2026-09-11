@@ -11,17 +11,18 @@ import {
   Sparkles,
   Settings,
   Trash2,
-  Edit3
+  Edit3,
+  Sliders
 } from 'lucide-react';
-import type { User } from 'firebase/auth';
-import type { SheetConfig, ActivePage, Language, UserProfile } from '../types';
+import type { SheetConfig, ActivePage, Language, UserProfile, GoogleUser } from '../types';
 
 interface NavbarProps {
-  user: User | null;
+  user: GoogleUser | null;
   sheetConfig: SheetConfig;
   isSyncing: boolean;
   onSync: () => void;
   onOpenSyncModal: () => void;
+  onOpenDailyLimitModal?: () => void;
   onLogin: () => void;
   onLogout: () => void;
   language: Language;
@@ -39,6 +40,7 @@ export const Navbar = ({
   isSyncing,
   onSync,
   onOpenSyncModal,
+  onOpenDailyLimitModal,
   onLogin,
   onLogout,
   language,
@@ -226,6 +228,21 @@ export const Navbar = ({
                     <Edit3 className="w-4 h-4 text-blue-600" />
                     <span>{t.editProfile}</span>
                   </button>
+
+                  {/* Daily Expense Limit Modal */}
+                  {onOpenDailyLimitModal && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowUserMenu(false);
+                        onOpenDailyLimitModal();
+                      }}
+                      className="w-full text-left flex items-center gap-2 px-2.5 py-2 text-xs text-slate-700 hover:bg-slate-50 rounded-xl transition-colors"
+                    >
+                      <Sliders className="w-4 h-4 text-emerald-600" />
+                      <span>{language === 'bn' ? 'দৈনিক খরচের লিমিট' : 'Daily Expense Limit'}</span>
+                    </button>
+                  )}
 
                   {/* Google Sheets Modal */}
                   <button

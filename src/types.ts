@@ -123,6 +123,18 @@ export interface CategorySummary {
 
 export type Language = 'bn' | 'en';
 
+export interface GoogleUser {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL?: string | null;
+}
+
+export interface DailyExpenseLimit {
+  amount: number;
+  enabled: boolean;
+}
+
 export interface UserProfile {
   name: string;
   businessName?: string;
@@ -131,4 +143,5 @@ export interface UserProfile {
   registeredAt: string;
   email?: string;
   isRegistered: boolean;
+  dailyExpenseLimit?: DailyExpenseLimit;
 }

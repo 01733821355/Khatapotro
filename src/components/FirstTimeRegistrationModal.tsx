@@ -12,14 +12,14 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import type { User as FirebaseUser } from 'firebase/auth';
-import type { UserProfile, Language } from '../types';
+import type { UserProfile, Language, GoogleUser } from '../types';
 
 interface FirstTimeRegistrationModalProps {
   isOpen: boolean;
   onClose: () => void;
   onRegister: (profile: UserProfile, initialBalance: number) => Promise<void> | void;
   initialProfile?: UserProfile | null;
-  firebaseUser: FirebaseUser | null;
+  firebaseUser: FirebaseUser | GoogleUser | null;
   onGoogleSignIn: () => Promise<void>;
   language: Language;
   isFirstTime?: boolean;

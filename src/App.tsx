@@ -5,6 +5,11 @@ import {
   googleSignIn, 
   logout 
 } from './lib/firebase';
+import { 
+  signInWithGoogle, 
+  getStoredAuth, 
+  signOutGoogle 
+} from './services/googleAuthService';
 import { storageService } from './services/storageService';
 import { 
   createKhataPotroSpreadsheet, 
@@ -21,7 +26,9 @@ import type {
   Language, 
   DocumentCategory,
   TransactionType,
-  UserProfile
+  UserProfile,
+  GoogleUser,
+  DailyExpenseLimit
 } from './types';
 
 // Components
@@ -33,6 +40,7 @@ import { CategoryExpenseReport } from './components/CategoryExpenseReport';
 import { DocumentManager } from './components/DocumentManager';
 import { GoogleSheetSyncModal } from './components/GoogleSheetSyncModal';
 import { AddTransactionModal } from './components/AddTransactionModal';
+import { DailyExpenseLimitModal } from './components/DailyExpenseLimitModal';
 import { ReportPage } from './components/ReportPage';
 import { LoanPage } from './components/LoanPage';
 import { LendingPage } from './components/LendingPage';
@@ -57,9 +65,9 @@ import {
 import { formatCurrency } from './utils/formatters';
 
 export default function App() {
-  // Global App State
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  // Global App State - check stored Google OAuth auth first
+  const [user, setUser] = useState<User | GoogleUser | null>(() => getStoredAuth().user);
+  const [token, setToken] = useState<string | null>(() => getStoredAuth().token);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(() => storageService.getUserProfile());
   const [language, setLanguage] = useState<Language>(() => storageService.getLanguage());
   const [activePage, setActivePage] = useState<ActivePage>('home');
@@ -70,6 +78,7 @@ export default function App() {
   const [inventoryLogs] = useState<InventoryLog[]>(() => storageService.getInventoryLogs());
   const [documents, setDocuments] = useState<CloudDocument[]>(() => storageService.getDocuments());
   const [sheetConfig, setSheetConfig] = useState<SheetConfig>(() => storageService.getSheetConfig());
+  const [dailyExpenseLimit, setDailyExpenseLimit] = useState<DailyExpenseLimit>(() => storageService.getDailyExpenseLimit());
 
   // UI States
   const [isSyncing, setIsSyncing] = useState(false);
@@ -79,6 +88,7 @@ export default function App() {
   // Modals
   const [isAddTxOpen, setIsAddTxOpen] = useState(false);
   const [addTxDefaultType, setAddTxDefaultType] = useState<TransactionType>('expense');
+  const [isDailyLimitModalOpen, setIsDailyLimitModalOpen] = useState(false);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [isAllTxModalOpen, setIsAllTxModalOpen] = useState(false);
   const [isDocsModalOpen, setIsDocsModalOpen] = useState(false);
@@ -94,10 +104,10 @@ export default function App() {
     setToastMessage({ text, type });
     setTimeout(() => {
       setToastMessage(null);
-    }, 4000);
+    }, 5000);
   }, []);
 
-  // Listen to Firebase Auth state
+  // Listen to Firebase Auth state if configured
   useEffect(() => {
     const unsubscribe = initAuth(
       (currentUser, accessToken) => {
@@ -105,8 +115,11 @@ export default function App() {
         setToken(accessToken);
       },
       () => {
-        setUser(null);
-        setToken(null);
+        // Only clear if no stored Google User
+        if (!getStoredAuth().user) {
+          setUser(null);
+          setToken(null);
+        }
       }
     );
 
@@ -164,6 +177,26 @@ export default function App() {
     };
   }, [transactions, userProfile]);
 
+  // Today's expense calculation for Daily Limit Tracker
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const todayExpense = useMemo(() => {
+    return transactions
+      .filter((t) => t.type === 'expense' && t.date === todayStr)
+      .reduce((sum, t) => sum + t.amount, 0);
+  }, [transactions, todayStr]);
+
+  // Save Daily Expense Limit
+  const handleSaveDailyLimit = (newLimit: DailyExpenseLimit) => {
+    setDailyExpenseLimit(newLimit);
+    storageService.saveDailyExpenseLimit(newLimit);
+    showToast(
+      language === 'bn'
+        ? `দৈনিক খরচের লিমিট ${newLimit.enabled ? formatCurrency(newLimit.amount, language) + ' সেট করা হয়েছে' : 'বন্ধ করা হয়েছে'}`
+        : `Daily limit ${newLimit.enabled ? 'set to ' + formatCurrency(newLimit.amount, language) : 'disabled'}`,
+      'success'
+    );
+  };
+
   // Handle User Profile Registration / Update
   const handleRegisterProfile = (profile: UserProfile, initialBalance: number) => {
     storageService.saveUserProfile(profile);
@@ -214,10 +247,11 @@ export default function App() {
     }, 300);
   };
 
-  // Handle Google Sign-in
+  // Handle Google / Gmail Sign-in with automatic fallback
   const handleLogin = async () => {
     try {
-      const res = await googleSignIn();
+      // First attempt direct Google / Gmail OAuth (works everywhere without Firebase domain restriction)
+      const res = await signInWithGoogle();
       if (res) {
         setUser(res.user);
         setToken(res.accessToken);
@@ -226,15 +260,45 @@ export default function App() {
             ? `স্বাগতম, ${res.user.displayName || res.user.email}!`
             : `Welcome, ${res.user.displayName || res.user.email}!`
         );
+        return;
       }
-    } catch (err: any) {
-      console.error('Sign-in error:', err);
-      showToast(err?.message || 'Google Sign-in failed', 'error');
+    } catch (gsiErr: any) {
+      console.warn('Direct Google OAuth attempt notice:', gsiErr);
+      // Fallback to Firebase Google Sign-in
+      try {
+        const res = await googleSignIn();
+        if (res) {
+          setUser(res.user);
+          setToken(res.accessToken);
+          showToast(
+            language === 'bn'
+              ? `স্বাগতম, ${res.user.displayName || res.user.email}!`
+              : `Welcome, ${res.user.displayName || res.user.email}!`
+          );
+        }
+      } catch (err: any) {
+        console.error('Sign-in error:', err);
+        if (err?.code === 'auth/unauthorized-domain' || err?.message?.includes('unauthorized-domain')) {
+          showToast(
+            language === 'bn'
+              ? 'Firebase প্রজেক্ট অমিল: Firebase কনসোলে khatapotor প্রজেক্টের সঠিক API Key / কনফিগারেশন সেট করুন।'
+              : 'Firebase unauthorized domain error. Please check your Firebase project config.',
+            'error'
+          );
+        } else {
+          showToast(err?.message || 'Google Sign-in failed', 'error');
+        }
+      }
     }
   };
 
   const handleLogout = async () => {
-    await logout();
+    try {
+      await logout();
+    } catch {
+      // ignore
+    }
+    signOutGoogle();
     setUser(null);
     setToken(null);
     showToast(language === 'bn' ? 'লগআউট সফল হয়েছে' : 'Signed out successfully');
@@ -245,14 +309,24 @@ export default function App() {
     let currentToken = token;
     if (!currentToken) {
       try {
-        const res = await googleSignIn();
-        if (!res) return;
-        currentToken = res.accessToken;
-        setUser(res.user);
-        setToken(currentToken);
-      } catch (err: any) {
-        showToast(language === 'bn' ? 'গুগল সাইন ইন করুন' : 'Please sign in with Google to sync', 'error');
-        return;
+        const res = await signInWithGoogle();
+        if (res) {
+          currentToken = res.accessToken;
+          setUser(res.user);
+          setToken(currentToken);
+        }
+      } catch {
+        try {
+          const res = await googleSignIn();
+          if (res) {
+            currentToken = res.accessToken;
+            setUser(res.user);
+            setToken(currentToken);
+          }
+        } catch (err: any) {
+          showToast(language === 'bn' ? 'গুগল সাইন ইন করুন' : 'Please sign in with Google to sync', 'error');
+          return;
+        }
       }
     }
 
@@ -618,6 +692,7 @@ export default function App() {
         isSyncing={isSyncing}
         onSync={handleSyncAll}
         onOpenSyncModal={() => setIsSyncModalOpen(true)}
+        onOpenDailyLimitModal={() => setIsDailyLimitModalOpen(true)}
         onLogin={handleLogin}
         onLogout={handleLogout}
         language={language}
@@ -668,6 +743,9 @@ export default function App() {
               totalBalance={totalBalance}
               monthIncome={monthIncome}
               monthExpense={monthExpense}
+              todayExpense={todayExpense}
+              dailyExpenseLimit={dailyExpenseLimit}
+              onOpenDailyLimitModal={() => setIsDailyLimitModalOpen(true)}
               userName={userProfile?.name?.split(' ')[0] || user?.displayName?.split(' ')[0] || 'Bappy'}
               language={language}
             />
@@ -862,6 +940,18 @@ export default function App() {
         defaultType={addTxDefaultType}
         documents={documents}
         onAddTransaction={handleAddTransaction}
+        language={language}
+        dailyExpenseLimit={dailyExpenseLimit}
+        todayExpense={todayExpense}
+      />
+
+      {/* Daily Expense Limit Settings Modal */}
+      <DailyExpenseLimitModal
+        isOpen={isDailyLimitModalOpen}
+        onClose={() => setIsDailyLimitModalOpen(false)}
+        limit={dailyExpenseLimit}
+        todayExpense={todayExpense}
+        onSaveLimit={handleSaveDailyLimit}
         language={language}
       />
 

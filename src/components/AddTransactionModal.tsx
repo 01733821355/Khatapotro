@@ -1,6 +1,7 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import { PlusCircle, MinusCircle, X, Paperclip, User } from 'lucide-react';
-import type { Transaction, TransactionType, PaymentMethod, CloudDocument, Language, TransactionBadge } from '../types';
+import { PlusCircle, MinusCircle, X, Paperclip, User, AlertTriangle } from 'lucide-react';
+import type { Transaction, TransactionType, PaymentMethod, CloudDocument, Language, TransactionBadge, DailyExpenseLimit } from '../types';
+import { formatCurrency } from '../utils/formatters';
 
 interface AddTransactionModalProps {
   isOpen: boolean;
@@ -12,6 +13,8 @@ interface AddTransactionModalProps {
     newFileToUpload?: { file: File; title: string; category: any }
   ) => Promise<void>;
   language: Language;
+  dailyExpenseLimit?: DailyExpenseLimit;
+  todayExpense?: number;
 }
 
 const EXPENSE_CATEGORIES = ['খাবার', 'বিল', 'যাতায়াত', 'বাজার', 'অন্যান্য খরচ', 'ধার প্রদান', 'ঋণ পরিশোধ', 'দোকান ভাড়া', 'বেতন'];
@@ -25,6 +28,8 @@ export const AddTransactionModal = ({
   documents,
   onAddTransaction,
   language,
+  dailyExpenseLimit,
+  todayExpense = 0,
 }: AddTransactionModalProps) => {
   const [type, setType] = useState<TransactionType>(defaultType);
   const [title, setTitle] = useState('');
@@ -192,9 +197,19 @@ export const AddTransactionModal = ({
 
           {/* Amount */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              {t.amountLabel}
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-700">
+                {t.amountLabel}
+              </label>
+              {type === 'expense' && dailyExpenseLimit?.enabled && (
+                <span className="text-[11px] text-slate-500 font-medium">
+                  {language === 'bn' ? 'দৈনিক লিমিট:' : 'Daily Limit:'}{' '}
+                  <strong className="text-slate-700 font-mono">
+                    {formatCurrency(dailyExpenseLimit.amount, language)}
+                  </strong>
+                </span>
+              )}
+            </div>
             <input
               type="number"
               required
@@ -204,6 +219,28 @@ export const AddTransactionModal = ({
               onChange={(e) => setAmount(e.target.value === '' ? '' : parseFloat(e.target.value))}
               className="w-full px-3 py-2 text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
+
+            {/* Proactive warning if adding this expense exceeds daily limit */}
+            {type === 'expense' &&
+              dailyExpenseLimit?.enabled &&
+              Number(amount) > 0 &&
+              todayExpense + Number(amount) > dailyExpenseLimit.amount && (
+                <div className="mt-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2 text-xs text-amber-800 animate-in fade-in-50">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-bold">
+                      {language === 'bn'
+                        ? 'সতর্কতা: এটি যোগ করলে দৈনিক লিমিট অতিক্রম করবে!'
+                        : 'Alert: Exceeds daily budget limit!'}
+                    </p>
+                    <p className="text-[11px] text-amber-700 mt-0.5">
+                      {language === 'bn'
+                        ? `আজকের খরচ দাঁড়াবে ${formatCurrency(todayExpense + Number(amount), language)}, যা আপনার দৈনিক লিমিট (${formatCurrency(dailyExpenseLimit.amount, language)}) থেকে ${formatCurrency(todayExpense + Number(amount) - dailyExpenseLimit.amount, language)} বেশি।`
+                        : `Total today will be ${formatCurrency(todayExpense + Number(amount), language)}, which exceeds your limit by ${formatCurrency(todayExpense + Number(amount) - dailyExpenseLimit.amount, language)}.`}
+                    </p>
+                  </div>
+                </div>
+              )}
           </div>
 
           {/* Category & Date */}

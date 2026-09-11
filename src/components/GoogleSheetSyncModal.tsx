@@ -19,13 +19,12 @@ import {
   Settings,
   Edit3
 } from 'lucide-react';
-import type { User as FirebaseUser } from 'firebase/auth';
-import type { SheetConfig, Language, UserProfile } from '../types';
+import type { SheetConfig, Language, UserProfile, GoogleUser } from '../types';
 
 interface GoogleSheetSyncModalProps {
   isOpen: boolean;
   onClose: () => void;
-  user: FirebaseUser | null;
+  user: GoogleUser | null;
   sheetConfig: SheetConfig;
   isSyncing: boolean;
   onSyncAll: () => Promise<void>;

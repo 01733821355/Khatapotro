@@ -1,4 +1,4 @@
-import type { Transaction, InventoryItem, InventoryLog, CloudDocument, SheetConfig, UserProfile } from '../types';
+import type { Transaction, InventoryItem, InventoryLog, CloudDocument, SheetConfig, UserProfile, DailyExpenseLimit } from '../types';
 
 const TRANSACTIONS_KEY = 'khatapotro_transactions_v4';
 const INVENTORY_KEY = 'khatapotro_inventory_v4';
@@ -8,6 +8,7 @@ const SHEET_CONFIG_KEY = 'khatapotro_sheet_config_v4';
 const LANG_KEY = 'khatapotro_language_v4';
 const PROFILE_KEY = 'khatapotro_user_profile_v4';
 const IS_INITIALIZED_KEY = 'khatapotro_initialized_v4';
+const DAILY_LIMIT_KEY = 'khatapotro_daily_expense_limit_v1';
 
 // Initial transactions matching user screenshot (23 records, 33,690 income, 24,807 expense, 8,883 balance)
 const INITIAL_TRANSACTIONS: Transaction[] = [
@@ -637,5 +638,22 @@ export const storageService = {
 
   saveLanguage(lang: 'bn' | 'en') {
     localStorage.setItem(LANG_KEY, lang);
+  },
+
+  getDailyExpenseLimit(): DailyExpenseLimit {
+    try {
+      const data = localStorage.getItem(DAILY_LIMIT_KEY);
+      if (data) return JSON.parse(data);
+    } catch {
+      // fallback
+    }
+    return {
+      amount: 1500, // Default sensible limit in BDT
+      enabled: false,
+    };
+  },
+
+  saveDailyExpenseLimit(limit: DailyExpenseLimit) {
+    localStorage.setItem(DAILY_LIMIT_KEY, JSON.stringify(limit));
   },
 };
