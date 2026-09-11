@@ -238,23 +238,65 @@ export const GoogleSheetSyncModal = ({
               )}
             </div>
 
-            {/* Error notification if any */}
+            {/* Error & API Activation Guide */}
             {errorMessage && (
-              <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex flex-col gap-2">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
-                  <div className="flex-1 font-medium leading-relaxed whitespace-pre-wrap">{errorMessage}</div>
+              <div className="p-4 rounded-2xl bg-amber-50/90 border border-amber-300 text-slate-800 text-xs flex flex-col gap-3 shadow-xs">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-amber-600" />
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-bold text-slate-900 text-sm">
+                      {errorMessage.includes('689412959744') || errorMessage.includes('API') || errorMessage.includes('api')
+                        ? (language === 'bn' ? 'গুগল ক্লাউডে API সক্রিয় (Enable) করা প্রয়োজন' : 'Action Required: Enable API in Google Cloud')
+                        : (language === 'bn' ? 'সিঙ্ক সংক্রান্ত তথ্য' : 'Sync Notice')}
+                    </h4>
+                    <p className="mt-1 leading-relaxed text-slate-700 whitespace-pre-wrap">
+                      {errorMessage}
+                    </p>
+                  </div>
                 </div>
-                {errorMessage.includes('http') && (
-                  <div className="pt-1 pl-6">
+
+                {/* Direct 1-Click Action Buttons to Enable Google APIs */}
+                {(errorMessage.includes('689412959744') || errorMessage.includes('API') || errorMessage.includes('api') || errorMessage.includes('http')) && (
+                  <div className="pt-2 border-t border-amber-200/80 flex flex-col sm:flex-row gap-2">
                     <a
-                      href={errorMessage.match(/https?:\/\/[^\s)]+/)?.[0]}
+                      href="https://console.developers.google.com/apis/api/sheets.googleapis.com/overview?project=689412959744"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 text-white rounded-lg text-[11px] font-bold hover:bg-rose-700 transition-colors shadow-xs"
+                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs"
                     >
-                      <span>গুগল ক্লাউডে API সক্রিয় (Enable) করুন ↗</span>
+                      <span>১. Google Sheets API চালু করুন ↗</span>
                     </a>
+                    <a
+                      href="https://console.developers.google.com/apis/api/drive.googleapis.com/overview?project=689412959744"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-xl text-xs font-semibold transition-colors"
+                    >
+                      <span>২. Google Drive API চালু করুন ↗</span>
+                    </a>
+                  </div>
+                )}
+                
+                {(errorMessage.includes('689412959744') || errorMessage.includes('API') || errorMessage.includes('api')) && (
+                  <div className="bg-white/90 p-3 rounded-xl text-[11px] text-slate-700 space-y-1.5 border border-amber-200">
+                    <p className="font-bold text-slate-900">
+                      {language === 'bn' ? 'API চালু করার সহজ ৩টি ধাপ:' : 'Simple 3-step setup:'}
+                    </p>
+                    <p>
+                      {language === 'bn'
+                        ? '১. উপরের "Google Sheets API চালু করুন" বাটনে ক্লিক করে গুগল ক্লাউড পেজে যান।'
+                        : '1. Click "Enable Google Sheets API" above to open Google Cloud Console.'}
+                    </p>
+                    <p>
+                      {language === 'bn'
+                        ? '২. পেজটি লোড হলে বড় নীল রঙের "ENABLE" (সক্রিয় করুন) বাটনে ক্লিক করুন।'
+                        : '2. Once the page opens, click the blue "ENABLE" button.'}
+                    </p>
+                    <p>
+                      {language === 'bn'
+                        ? '৩. এরপর এখানে ফিরে এসে "সকল ডেটা গুগল শিটে সিঙ্ক করুন" চাপুন — তথ্য শিটে সংরক্ষিত হবে।'
+                        : '3. Return to KhataPotro and click "Sync All Data" — your data will sync immediately.'}
+                    </p>
                   </div>
                 )}
               </div>

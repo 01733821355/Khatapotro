@@ -427,6 +427,7 @@ export default function App() {
     } catch (err: any) {
       console.error('Sync failed:', err);
       showToast(err?.message || 'Sync failed. Check permissions.', 'error');
+      throw err;
     } finally {
       setIsSyncing(false);
     }
@@ -482,6 +483,7 @@ export default function App() {
     } catch (err: any) {
       console.error('Create sheet failed:', err);
       showToast(err?.message || 'Failed to create spreadsheet', 'error');
+      throw err;
     } finally {
       setIsSyncing(false);
     }
@@ -558,6 +560,7 @@ export default function App() {
     } catch (err: any) {
       console.error('Sync to linked sheet failed:', err);
       showToast(err?.message || 'Failed to sync with linked sheet. Check permissions.', 'error');
+      throw err;
     } finally {
       setIsSyncing(false);
     }
