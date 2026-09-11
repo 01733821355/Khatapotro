@@ -36,6 +36,7 @@ export const GOOGLE_SCOPES = [
 
 const USER_STORAGE_KEY = 'khatapotro_gsi_user_v1';
 const TOKEN_STORAGE_KEY = 'khatapotro_google_access_token_v1';
+const EXPIRY_STORAGE_KEY = 'khatapotro_google_token_expiry_v1';
 
 let cachedUser: GoogleUser | null = (() => {
   try {
@@ -48,6 +49,12 @@ let cachedUser: GoogleUser | null = (() => {
 
 let cachedToken: string | null = (() => {
   try {
+    const exp = localStorage.getItem(EXPIRY_STORAGE_KEY);
+    if (exp && Date.now() > Number(exp)) {
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      localStorage.removeItem(EXPIRY_STORAGE_KEY);
+      return null;
+    }
     return localStorage.getItem(TOKEN_STORAGE_KEY);
   } catch {
     return null;
@@ -111,6 +118,14 @@ export async function signInWithGoogle(): Promise<{ user: GoogleUser; accessToke
         scope: GOOGLE_SCOPES,
         callback: async (tokenResponse) => {
           if (tokenResponse.error) {
+            if (tokenResponse.error === 'popup_closed_by_user' || tokenResponse.error === 'access_denied') {
+              console.info('Google sign-in was closed or cancelled by user:', tokenResponse.error);
+              const cancelErr: any = new Error('গুগল সাইন-ইন বাতিল করা হয়েছে।');
+              cancelErr.isCancelled = true;
+              cancelErr.code = 'auth/popup-closed';
+              reject(cancelErr);
+              return;
+            }
             console.error('Google Auth Error:', tokenResponse.error);
             reject(new Error(tokenResponse.error_description || 'গুগল সাইন ইন বাতিল হয়েছে বা ব্যর্থ হয়েছে।'));
             return;
@@ -119,8 +134,12 @@ export async function signInWithGoogle(): Promise<{ user: GoogleUser; accessToke
           if (tokenResponse.access_token) {
             const token = tokenResponse.access_token;
             cachedToken = token;
+            const expiresInSec = Number((tokenResponse as any).expires_in) || 3600;
+            const expiryTimestamp = Date.now() + (expiresInSec - 120) * 1000;
+
             try {
               localStorage.setItem(TOKEN_STORAGE_KEY, token);
+              localStorage.setItem(EXPIRY_STORAGE_KEY, String(expiryTimestamp));
             } catch {
               // ignore
             }
@@ -146,8 +165,23 @@ export async function signInWithGoogle(): Promise<{ user: GoogleUser; accessToke
           }
         },
         error_callback: (err) => {
-          console.error('OAuth client error:', err);
-          reject(new Error('গুগল সাইন ইন উইন্ডো খোলা সম্ভব হয়নি। পপ-আপ ব্লকার বন্ধ রয়েছে কিনা চেক করুন।'));
+          if (err?.type === 'popup_closed' || err?.message?.includes('closed')) {
+            console.info('Google sign-in popup was closed by user.');
+            const cancelErr: any = new Error('গুগল সাইন-ইন উইন্ডো বন্ধ করা হয়েছে।');
+            cancelErr.isCancelled = true;
+            cancelErr.code = 'auth/popup-closed';
+            reject(cancelErr);
+            return;
+          }
+          if (err?.type === 'popup_failed_to_open') {
+            console.warn('Google sign-in popup was blocked by browser:', err);
+            const blockedErr: any = new Error('ব্রাউজারে পপ-আপ ব্লক করা আছে। ব্রাউজারের অ্যাড্রেস বার থেকে পপ-আপ এলাউ করুন।');
+            blockedErr.code = 'auth/popup-blocked';
+            reject(blockedErr);
+            return;
+          }
+          console.warn('Google OAuth client notice:', err);
+          reject(new Error(err?.message || 'গুগল সাইন-ইন প্রক্রিয়া সম্পন্ন হয়নি।'));
         },
       });
 
@@ -160,6 +194,16 @@ export async function signInWithGoogle(): Promise<{ user: GoogleUser; accessToke
 }
 
 export function getStoredAuth(): { user: GoogleUser | null; token: string | null } {
+  try {
+    const exp = localStorage.getItem(EXPIRY_STORAGE_KEY);
+    if (exp && Date.now() > Number(exp)) {
+      cachedToken = null;
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      localStorage.removeItem(EXPIRY_STORAGE_KEY);
+    }
+  } catch {
+    // ignore
+  }
   return { user: cachedUser, token: cachedToken };
 }
 
@@ -169,6 +213,7 @@ export function signOutGoogle() {
   try {
     localStorage.removeItem(USER_STORAGE_KEY);
     localStorage.removeItem(TOKEN_STORAGE_KEY);
+    localStorage.removeItem(EXPIRY_STORAGE_KEY);
   } catch {
     // ignore
   }

@@ -31,6 +31,7 @@ interface GoogleSheetSyncModalProps {
   onCreateNewSheet: () => Promise<void>;
   onSaveExistingSheetId: (sheetId: string) => Promise<void>;
   onLogin: () => void;
+  onLogout?: () => void;
   language: Language;
   userProfile?: UserProfile | null;
   onOpenEditProfile?: () => void;
@@ -49,6 +50,7 @@ export const GoogleSheetSyncModal = ({
   onCreateNewSheet,
   onSaveExistingSheetId,
   onLogin,
+  onLogout,
   language,
   userProfile,
   onOpenEditProfile,
@@ -75,8 +77,8 @@ export const GoogleSheetSyncModal = ({
     createNew: language === 'bn' ? 'নতুন খাতাপত্র গুগল শিট তৈরি করুন' : 'Create New KhataPotro Sheet',
     syncAll: language === 'bn' ? 'সকল ডেটা গুগল শিটে সিঙ্ক করুন' : 'Push All Data to Google Sheets',
     openSheet: language === 'bn' ? 'গুগল শিট খুলুন ↗' : 'Open in Google Sheets ↗',
-    orUseExisting: language === 'bn' ? 'অথবা পূর্বের শিট আইডি ব্যবহার করুন:' : 'Or connect an existing Spreadsheet ID:',
-    saveSheetId: language === 'bn' ? 'শিট লিংক করুন' : 'Link Sheet',
+    orUseExisting: language === 'bn' ? 'অথবা পূর্বের গুগল শিটের সম্পূর্ণ লিংক বা আইডি দিন:' : 'Or connect an existing Google Sheet URL or ID:',
+    saveSheetId: language === 'bn' ? 'লিংক ও সিঙ্ক করুন' : 'Link & Sync Now',
     lastSync: language === 'bn' ? 'সর্বশেষ সিঙ্ক সময়' : 'Last Synced At',
     confirmSyncTitle: language === 'bn' ? 'গুগল শিটে ডেটা সিঙ্ক নিশ্চিতকরণ' : 'Confirm Google Sheets Data Sync',
     confirmSyncBody: language === 'bn'
@@ -192,37 +194,69 @@ export const GoogleSheetSyncModal = ({
         {activeTab === 'sheets' && (
           <div className="space-y-4 animate-in fade-in-50 duration-150">
             {/* User Account Info */}
-            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center">
-                  {user?.email?.charAt(0).toUpperCase() || 'G'}
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
+                  user ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-600'
+                }`}>
+                  {user?.email ? user.email.charAt(0).toUpperCase() : 'G'}
                 </div>
-                <div>
-                  <p className="text-xs font-semibold text-slate-900">
-                    {user?.displayName || 'Google Account'}
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-slate-900 truncate">
+                    {user?.displayName || (user ? 'Google User' : (language === 'bn' ? 'গুগল অ্যাকাউন্ট ডিসকানেক্টেড' : 'Google Account Disconnected'))}
                   </p>
-                  <p className="text-xs text-slate-500 font-mono">
-                    {user?.email || 'mdbappyhossain018@gmail.com'}
+                  <p className="text-[11px] text-slate-500 font-mono truncate">
+                    {user?.email || (language === 'bn' ? 'সিঙ্ক করতে সাইন ইন করুন' : 'Sign in to enable Sheets & Drive sync')}
                   </p>
                 </div>
               </div>
 
-              {!user && (
+              {user ? (
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1.5 animate-pulse"></span>
+                    {language === 'bn' ? 'সংযুক্ত' : 'Connected'}
+                  </span>
+                  {onLogout && (
+                    <button
+                      type="button"
+                      onClick={onLogout}
+                      className="px-2.5 py-1 text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 rounded-lg text-xs font-medium transition-colors"
+                    >
+                      {language === 'bn' ? 'লগআউট' : 'Sign Out'}
+                    </button>
+                  )}
+                </div>
+              ) : (
                 <button
                   type="button"
                   onClick={onLogin}
-                  className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors"
+                  className="px-3.5 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors shadow-xs shrink-0"
                 >
-                  Sign In
+                  {language === 'bn' ? 'সাইন ইন করুন' : 'Sign In'}
                 </button>
               )}
             </div>
 
             {/* Error notification if any */}
             {errorMessage && (
-              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <div className="flex-1">{errorMessage}</div>
+              <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex flex-col gap-2">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+                  <div className="flex-1 font-medium leading-relaxed whitespace-pre-wrap">{errorMessage}</div>
+                </div>
+                {errorMessage.includes('http') && (
+                  <div className="pt-1 pl-6">
+                    <a
+                      href={errorMessage.match(/https?:\/\/[^\s)]+/)?.[0]}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 text-white rounded-lg text-[11px] font-bold hover:bg-rose-700 transition-colors shadow-xs"
+                    >
+                      <span>গুগল ক্লাউডে API সক্রিয় (Enable) করুন ↗</span>
+                    </a>
+                  </div>
+                )}
               </div>
             )}
 
@@ -322,7 +356,7 @@ export const GoogleSheetSyncModal = ({
               <div className="flex items-center gap-2">
                 <input
                   type="text"
-                  placeholder="e.g. 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+                  placeholder="https://docs.google.com/spreadsheets/d/... অথবা স্প্রেডশিট আইডি"
                   value={customSheetId}
                   onChange={(e) => setCustomSheetId(e.target.value)}
                   className="flex-1 px-3 py-2 text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"

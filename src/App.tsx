@@ -13,7 +13,9 @@ import {
 import { storageService } from './services/storageService';
 import { 
   createKhataPotroSpreadsheet, 
-  syncAllToSheet
+  syncAllToSheet,
+  extractSpreadsheetId,
+  ensureRequiredSheetsExist
 } from './services/googleSheetsService';
 import { uploadDocumentToDrive } from './services/googleDriveService';
 
@@ -139,6 +141,32 @@ export default function App() {
     storageService.saveSheetConfig(sheetConfig);
   }, [sheetConfig]);
 
+  // Real-Time Background Sync (synchronizes active state seamlessly with Google Sheets)
+  useEffect(() => {
+    if (!token || !sheetConfig.spreadsheetId || !sheetConfig.autoSync) return;
+
+    const intervalId = setInterval(async () => {
+      try {
+        await syncAllToSheet(
+          token,
+          sheetConfig.spreadsheetId,
+          transactions,
+          inventory,
+          inventoryLogs,
+          documents
+        );
+        setSheetConfig((prev) => ({
+          ...prev,
+          lastSyncTime: new Date().toISOString(),
+        }));
+      } catch (err) {
+        console.debug('Real-time sync background tick notice:', err);
+      }
+    }, 45000);
+
+    return () => clearInterval(intervalId);
+  }, [token, sheetConfig.spreadsheetId, sheetConfig.autoSync, transactions, inventory, inventoryLogs, documents]);
+
   const toggleLanguage = () => {
     const nextLang = language === 'bn' ? 'en' : 'bn';
     setLanguage(nextLang);
@@ -247,10 +275,9 @@ export default function App() {
     }, 300);
   };
 
-  // Handle Google / Gmail Sign-in with automatic fallback
+  // Handle Google / Gmail Sign-in with direct user interaction
   const handleLogin = async () => {
     try {
-      // First attempt direct Google / Gmail OAuth (works everywhere without Firebase domain restriction)
       const res = await signInWithGoogle();
       if (res) {
         setUser(res.user);
@@ -260,35 +287,26 @@ export default function App() {
             ? `স্বাগতম, ${res.user.displayName || res.user.email}!`
             : `Welcome, ${res.user.displayName || res.user.email}!`
         );
-        return;
       }
     } catch (gsiErr: any) {
-      console.warn('Direct Google OAuth attempt notice:', gsiErr);
-      // Fallback to Firebase Google Sign-in
-      try {
-        const res = await googleSignIn();
-        if (res) {
-          setUser(res.user);
-          setToken(res.accessToken);
-          showToast(
-            language === 'bn'
-              ? `স্বাগতম, ${res.user.displayName || res.user.email}!`
-              : `Welcome, ${res.user.displayName || res.user.email}!`
-          );
-        }
-      } catch (err: any) {
-        console.error('Sign-in error:', err);
-        if (err?.code === 'auth/unauthorized-domain' || err?.message?.includes('unauthorized-domain')) {
-          showToast(
-            language === 'bn'
-              ? 'Firebase প্রজেক্ট অমিল: Firebase কনসোলে khatapotor প্রজেক্টের সঠিক API Key / কনফিগারেশন সেট করুন।'
-              : 'Firebase unauthorized domain error. Please check your Firebase project config.',
-            'error'
-          );
-        } else {
-          showToast(err?.message || 'Google Sign-in failed', 'error');
-        }
+      if (gsiErr?.isCancelled || gsiErr?.code === 'auth/popup-closed') {
+        showToast(
+          language === 'bn' ? 'গুগল সাইন-ইন বাতিল করা হয়েছে।' : 'Sign-in was cancelled.',
+          'error'
+        );
+        return;
       }
+      if (gsiErr?.code === 'auth/popup-blocked') {
+        showToast(
+          language === 'bn'
+            ? 'ব্রাউজারে পপ-আপ ব্লক করা আছে। ব্রাউজারের অ্যাড্রেস বার থেকে পপ-আপ এলাউ করুন।'
+            : 'Popup blocked by browser. Please allow popups for this site.',
+          'error'
+        );
+        return;
+      }
+      console.warn('Google sign-in notice:', gsiErr);
+      showToast(gsiErr?.message || 'Google Sign-in failed', 'error');
     }
   };
 
@@ -304,50 +322,79 @@ export default function App() {
     showToast(language === 'bn' ? 'লগআউট সফল হয়েছে' : 'Signed out successfully');
   };
 
-  // Perform Full Google Sheets Sync
-  const handleSyncAll = async () => {
-    let currentToken = token;
-    if (!currentToken) {
-      try {
-        const res = await signInWithGoogle();
-        if (res) {
-          currentToken = res.accessToken;
-          setUser(res.user);
-          setToken(currentToken);
-        }
-      } catch {
-        try {
-          const res = await googleSignIn();
-          if (res) {
-            currentToken = res.accessToken;
-            setUser(res.user);
-            setToken(currentToken);
-          }
-        } catch (err: any) {
-          showToast(language === 'bn' ? 'গুগল সাইন ইন করুন' : 'Please sign in with Google to sync', 'error');
-          return;
-        }
-      }
+  // Helper to ensure a fresh, valid token with Google Sheets & Drive scopes
+  const ensureValidToken = async (): Promise<string | null> => {
+    if (token) return token;
+
+    // First check stored authentication in localStorage
+    const stored = getStoredAuth();
+    if (stored.token) {
+      setToken(stored.token);
+      if (stored.user) setUser(stored.user);
+      return stored.token;
     }
 
+    try {
+      const res = await signInWithGoogle();
+      if (res?.accessToken) {
+        setUser(res.user);
+        setToken(res.accessToken);
+        return res.accessToken;
+      }
+    } catch (gsiErr: any) {
+      if (gsiErr?.isCancelled || gsiErr?.code === 'auth/popup-closed') {
+        console.info('Sign-in cancelled or popup closed by user.');
+        return null;
+      }
+      if (gsiErr?.code === 'auth/popup-blocked') {
+        throw new Error(
+          language === 'bn'
+            ? 'ব্রাউজারে পপ-আপ ব্লক করা আছে। ব্রাউজারের অ্যাড্রেস বার থেকে পপ-আপ এলাউ করুন।'
+            : 'Popup blocked by browser. Please allow popups for this site in your browser bar.'
+        );
+      }
+      console.warn('Sign-in notice:', gsiErr);
+      throw gsiErr;
+    }
+    return null;
+  };
+
+  // Perform Full Google Sheets Sync
+  const handleSyncAll = async () => {
     setIsSyncing(true);
     try {
+      const currentToken = await ensureValidToken();
+      if (!currentToken) {
+        showToast(
+          language === 'bn'
+            ? 'গুগল শিটে ডেটা পাঠাতে প্রথমে গুগল অ্যাকাউন্ট দিয়ে সাইন ইন করুন।'
+            : 'Please sign in with Google to push records to Google Sheets.',
+          'error'
+        );
+        return;
+      }
+
       let targetSheetId = sheetConfig.spreadsheetId;
 
-      // Auto-create spreadsheet if none exists
+      // Auto-create spreadsheet if none exists yet
       if (!targetSheetId) {
         const created = await createKhataPotroSpreadsheet(
           currentToken,
           'KhataPotro - আয় ও ব্যয় হিসাব এবং ডকুমেন্ট ভল্ট'
         );
         targetSheetId = created.spreadsheetId;
-        setSheetConfig({
+        const newCfg: SheetConfig = {
           spreadsheetId: created.spreadsheetId,
           spreadsheetUrl: created.spreadsheetUrl,
           spreadsheetName: 'KhataPotro - আয় ও ব্যয় হিসাব এবং ডকুমেন্ট ভল্ট',
           lastSyncTime: new Date().toISOString(),
           autoSync: true,
-        });
+        };
+        setSheetConfig(newCfg);
+        storageService.saveSheetConfig(newCfg);
+      } else {
+        // Ensure the 4 tabs exist in this sheet
+        await ensureRequiredSheetsExist(currentToken, targetSheetId);
       }
 
       // Sync data to Google Sheets
@@ -360,10 +407,13 @@ export default function App() {
         documents
       );
 
-      setSheetConfig((prev) => ({
-        ...prev,
+      const updatedCfg: SheetConfig = {
+        ...sheetConfig,
+        spreadsheetId: targetSheetId,
         lastSyncTime: new Date().toISOString(),
-      }));
+      };
+      setSheetConfig(updatedCfg);
+      storageService.saveSheetConfig(updatedCfg);
 
       // Mark all as synced
       setTransactions((prev) => prev.map((t) => ({ ...t, syncedToSheets: true })));
@@ -384,30 +434,34 @@ export default function App() {
 
   // Create New Sheet
   const handleCreateNewSheet = async () => {
-    let currentToken = token;
-    if (!currentToken) {
-      const res = await googleSignIn();
-      if (!res) return;
-      currentToken = res.accessToken;
-      setUser(res.user);
-      setToken(currentToken);
-    }
-
     setIsSyncing(true);
     try {
+      const currentToken = await ensureValidToken();
+      if (!currentToken) {
+        showToast(
+          language === 'bn'
+            ? 'নতুন শিট তৈরি করতে অনুগ্রহ করে প্রথমে গুগল অ্যাকাউন্ট দিয়ে সাইন ইন করুন।'
+            : 'Please sign in with Google to create a new spreadsheet.',
+          'error'
+        );
+        return;
+      }
+
       const result = await createKhataPotroSpreadsheet(
         currentToken,
         'KhataPotro - আয় ও ব্যয় হিসাব এবং ডকুমেন্ট ভল্ট'
       );
-      setSheetConfig({
+      const newCfg: SheetConfig = {
         spreadsheetId: result.spreadsheetId,
         spreadsheetUrl: result.spreadsheetUrl,
         spreadsheetName: 'KhataPotro - আয় ও ব্যয় হিসাব এবং ডকুমেন্ট ভল্ট',
         lastSyncTime: new Date().toISOString(),
         autoSync: true,
-      });
+      };
+      setSheetConfig(newCfg);
+      storageService.saveSheetConfig(newCfg);
 
-      // Sync existing data
+      // Sync all existing data immediately
       await syncAllToSheet(
         currentToken,
         result.spreadsheetId,
@@ -417,10 +471,13 @@ export default function App() {
         documents
       );
 
+      setTransactions((prev) => prev.map((t) => ({ ...t, syncedToSheets: true })));
+      setDocuments((prev) => prev.map((d) => ({ ...d, syncedToSheets: true })));
+
       showToast(
         language === 'bn'
           ? 'নতুন গুগল স্প্রেডশিট সফলভাবে তৈরি ও সিঙ্ক হয়েছে!'
-          : 'New Google Spreadsheet created and synced!'
+          : 'New Google Spreadsheet created and synced successfully!'
       );
     } catch (err: any) {
       console.error('Create sheet failed:', err);
@@ -430,15 +487,80 @@ export default function App() {
     }
   };
 
-  // Save Existing Sheet ID
-  const handleSaveExistingSheetId = async (id: string) => {
-    const url = `https://docs.google.com/spreadsheets/d/${id}/edit`;
-    setSheetConfig((prev) => ({
-      ...prev,
-      spreadsheetId: id,
+  // Save Existing Sheet ID / Link and Sync Data Immediately
+  const handleSaveExistingSheetId = async (input: string) => {
+    const cleanId = extractSpreadsheetId(input);
+    if (!cleanId) {
+      showToast(
+        language === 'bn' ? 'সঠিক গুগল স্প্রেডশিট আইডি বা লিংক দিন' : 'Please provide a valid Google Sheet link or ID',
+        'error'
+      );
+      return;
+    }
+
+    const url = `https://docs.google.com/spreadsheets/d/${cleanId}/edit`;
+    const newConfig: SheetConfig = {
+      ...sheetConfig,
+      spreadsheetId: cleanId,
       spreadsheetUrl: url,
-    }));
-    showToast(language === 'bn' ? 'শিট আইডি সংরক্ষিত হয়েছে!' : 'Sheet ID linked!');
+      spreadsheetName: 'KhataPotro Linked Sheet',
+      autoSync: true,
+    };
+    setSheetConfig(newConfig);
+    storageService.saveSheetConfig(newConfig);
+
+    showToast(
+      language === 'bn'
+        ? 'গুগল শিট লিংক সফলভাবে সংযুক্ত হয়েছে! ডেটা সিঙ্ক হচ্ছে...'
+        : 'Google Sheet linked! Synchronizing data...',
+      'success'
+    );
+
+    // Sync all data immediately into this linked spreadsheet
+    try {
+      const currentToken = await ensureValidToken();
+      if (currentToken) {
+        setIsSyncing(true);
+        // Automatically create missing tabs (Ledger_Transactions, RealTime_Inventory, Inventory_Logs, Document_Vault)
+        await ensureRequiredSheetsExist(currentToken, cleanId);
+        await syncAllToSheet(
+          currentToken,
+          cleanId,
+          transactions,
+          inventory,
+          inventoryLogs,
+          documents
+        );
+        const finalConfig: SheetConfig = {
+          ...newConfig,
+          lastSyncTime: new Date().toISOString(),
+        };
+        setSheetConfig(finalConfig);
+        storageService.saveSheetConfig(finalConfig);
+
+        setTransactions((prev) => prev.map((t) => ({ ...t, syncedToSheets: true })));
+        setDocuments((prev) => prev.map((d) => ({ ...d, syncedToSheets: true })));
+
+        showToast(
+          language === 'bn'
+            ? 'লিংক করা গুগল শিটে সকল তথ্য সফলভাবে সিঙ্ক হয়েছে!'
+            : 'All data synced to linked Google Sheet successfully!',
+          'success'
+        );
+      } else {
+        showToast(
+          language === 'bn'
+            ? 'শিট লিংক সংরক্ষিত হয়েছে! তথ্য শিটে পাঠাতে গুগল সাইন-ইন সম্পন্ন করুন।'
+            : 'Sheet link saved! Sign in with Google to push records to the sheet.',
+          'success'
+        );
+      }
+    } catch (err: any) {
+      console.error('Sync to linked sheet failed:', err);
+      showToast(err?.message || 'Failed to sync with linked sheet. Check permissions.', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   // Add Transaction
@@ -450,6 +572,18 @@ export default function App() {
 
     if (newFileToUpload) {
       try {
+        let fileDataUrl: string | undefined = undefined;
+        try {
+          fileDataUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = () => resolve('');
+            reader.readAsDataURL(newFileToUpload.file);
+          });
+        } catch {
+          // data url generation fallback
+        }
+
         let driveResult: { fileId: string; webViewLink?: string; webContentLink?: string } | null = null;
         if (token) {
           driveResult = await uploadDocumentToDrive(
@@ -472,6 +606,7 @@ export default function App() {
           driveFileId: driveResult?.fileId,
           driveViewLink: driveResult?.webViewLink,
           driveDownloadLink: driveResult?.webContentLink,
+          fileDataUrl,
           amount: newTx.amount,
           syncedToDrive: Boolean(driveResult?.fileId),
           syncedToSheets: false,
@@ -589,6 +724,18 @@ export default function App() {
   ) => {
     setIsUploading(true);
     try {
+      let fileDataUrl: string | undefined = undefined;
+      try {
+        fileDataUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => resolve('');
+          reader.readAsDataURL(file);
+        });
+      } catch {
+        // fallback
+      }
+
       let driveResult: { fileId: string; webViewLink?: string; webContentLink?: string } | null = null;
 
       if (token) {
@@ -616,6 +763,7 @@ export default function App() {
         driveFileId: driveResult?.fileId,
         driveViewLink: driveResult?.webViewLink,
         driveDownloadLink: driveResult?.webContentLink,
+        fileDataUrl,
         amount,
         notes,
         syncedToDrive: Boolean(driveResult?.fileId),
@@ -966,6 +1114,7 @@ export default function App() {
         onCreateNewSheet={handleCreateNewSheet}
         onSaveExistingSheetId={handleSaveExistingSheetId}
         onLogin={handleLogin}
+        onLogout={handleLogout}
         language={language}
         userProfile={userProfile}
         onOpenEditProfile={() => {

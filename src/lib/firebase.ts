@@ -104,11 +104,7 @@ export const initAuth = (
       }
     } else {
       cachedAccessToken = null;
-      try {
-        localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-      } catch {
-        // ignore
-      }
+      // Do not clear storage on initial null auth state so GIS token persists
       if (onAuthFailure) onAuthFailure();
     }
   });
@@ -130,7 +126,20 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
       // ignore
     }
     return { user: result.user, accessToken: cachedAccessToken };
-  } catch (error: unknown) {
+  } catch (error: any) {
+    if (error?.code === 'auth/popup-closed-by-user') {
+      console.info('Firebase popup was closed by user');
+      const cancelErr: any = new Error('গুগল সাইন-ইন উইন্ডো বন্ধ করা হয়েছে।');
+      cancelErr.isCancelled = true;
+      cancelErr.code = 'auth/popup-closed';
+      throw cancelErr;
+    }
+    if (error?.code === 'auth/popup-blocked') {
+      console.warn('Firebase popup was blocked by browser');
+      const blockedErr: any = new Error('ব্রাউজারে পপ-আপ ব্লক করা আছে। ব্রাউজারের অ্যাড্রেস বার থেকে পপ-আপ এলাউ করুন।');
+      blockedErr.code = 'auth/popup-blocked';
+      throw blockedErr;
+    }
     console.error('Google sign-in error:', error);
     throw error;
   } finally {
