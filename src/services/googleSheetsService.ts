@@ -63,6 +63,16 @@ export function parseGoogleApiError(errText: string, status?: number): {
   projectId?: string;
   userMessage: string;
 } {
+  let extractedMessage = errText;
+  try {
+    const json = JSON.parse(errText);
+    if (json?.error?.message) {
+      extractedMessage = json.error.message;
+    }
+  } catch {
+    // not JSON
+  }
+
   const isSheetsDisabled = 
     errText.includes('Google Sheets API has not been used') ||
     (errText.includes('sheets.googleapis.com') && (errText.includes('SERVICE_DISABLED') || status === 403));
@@ -114,7 +124,7 @@ export function parseGoogleApiError(errText: string, status?: number): {
   return {
     isApiDisabled: false,
     service: null,
-    userMessage: errText,
+    userMessage: extractedMessage,
   };
 }
 
@@ -375,8 +385,9 @@ export async function syncLedgerToSheet(
   });
 
   if (rows.length > 0) {
+    const targetRange = `Ledger_Transactions!A2:J${rows.length + 1}`;
     const res = await fetch(
-      `${SHEETS_BASE_URL}/${cleanId}/values/Ledger_Transactions!A2?valueInputOption=USER_ENTERED`,
+      `${SHEETS_BASE_URL}/${cleanId}/values/${encodeURIComponent(targetRange)}?valueInputOption=USER_ENTERED`,
       {
         method: 'PUT',
         headers: {
@@ -384,7 +395,7 @@ export async function syncLedgerToSheet(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          range: `Ledger_Transactions!A2:J${rows.length + 1}`,
+          range: targetRange,
           majorDimension: 'ROWS',
           values: rows,
         }),
@@ -440,8 +451,9 @@ export async function syncInventoryToSheet(
   });
 
   if (itemRows.length > 0) {
+    const targetRange = `RealTime_Inventory!A2:K${itemRows.length + 1}`;
     const res = await fetch(
-      `${SHEETS_BASE_URL}/${cleanId}/values/RealTime_Inventory!A2?valueInputOption=USER_ENTERED`,
+      `${SHEETS_BASE_URL}/${cleanId}/values/${encodeURIComponent(targetRange)}?valueInputOption=USER_ENTERED`,
       {
         method: 'PUT',
         headers: {
@@ -449,7 +461,7 @@ export async function syncInventoryToSheet(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          range: `RealTime_Inventory!A2:K${itemRows.length + 1}`,
+          range: targetRange,
           majorDimension: 'ROWS',
           values: itemRows,
         }),
@@ -482,8 +494,9 @@ export async function syncInventoryToSheet(
   });
 
   if (logRows.length > 0) {
+    const targetRange = `Inventory_Logs!A2:J${logRows.length + 1}`;
     const res = await fetch(
-      `${SHEETS_BASE_URL}/${cleanId}/values/Inventory_Logs!A2?valueInputOption=USER_ENTERED`,
+      `${SHEETS_BASE_URL}/${cleanId}/values/${encodeURIComponent(targetRange)}?valueInputOption=USER_ENTERED`,
       {
         method: 'PUT',
         headers: {
@@ -491,7 +504,7 @@ export async function syncInventoryToSheet(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          range: `Inventory_Logs!A2:J${logRows.length + 1}`,
+          range: targetRange,
           majorDimension: 'ROWS',
           values: logRows,
         }),
@@ -533,8 +546,9 @@ export async function syncDocumentsToSheet(
   });
 
   if (docRows.length > 0) {
+    const targetRange = `Document_Vault!A2:J${docRows.length + 1}`;
     const res = await fetch(
-      `${SHEETS_BASE_URL}/${cleanId}/values/Document_Vault!A2?valueInputOption=USER_ENTERED`,
+      `${SHEETS_BASE_URL}/${cleanId}/values/${encodeURIComponent(targetRange)}?valueInputOption=USER_ENTERED`,
       {
         method: 'PUT',
         headers: {
@@ -542,7 +556,7 @@ export async function syncDocumentsToSheet(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          range: `Document_Vault!A2:J${docRows.length + 1}`,
+          range: targetRange,
           majorDimension: 'ROWS',
           values: docRows,
         }),
