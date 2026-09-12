@@ -1,4 +1,4 @@
-import type { Transaction, InventoryItem, InventoryLog, CloudDocument } from '../types';
+import type { Transaction, InventoryItem, InventoryLog, CloudDocument, CalorieMealLog, CalorieActivityLog } from '../types';
 
 export interface SpreadsheetInfo {
   spreadsheetId: string;
@@ -218,6 +218,7 @@ export async function ensureRequiredSheetsExist(accessToken: string, spreadsheet
       { title: 'RealTime_Inventory', rowCount: 500, colCount: 12 },
       { title: 'Inventory_Logs', rowCount: 1000, colCount: 12 },
       { title: 'Document_Vault', rowCount: 500, colCount: 12 },
+      { title: 'Daily_Calorie_Log', rowCount: 1000, colCount: 12 },
     ];
 
     const requestsToAdd: any[] = [];
@@ -332,6 +333,25 @@ export async function initializeSheetHeaders(accessToken: string, spreadsheetId:
           'Drive View Link',
           'Upload Date',
           'Notes',
+        ],
+      ],
+    },
+    {
+      range: 'Daily_Calorie_Log!A1:L1',
+      values: [
+        [
+          'Log ID',
+          'Date',
+          'Time',
+          'Log Type (Meal / Activity)',
+          'Title / Item Name',
+          'Portion / Duration',
+          'Calories (Intake + / Burn -)',
+          'Protein (g)',
+          'Carbs (g)',
+          'Fat (g)',
+          'Notes',
+          'Synced At',
         ],
       ],
     },
@@ -571,6 +591,85 @@ export async function syncDocumentsToSheet(
 }
 
 /**
+ * Full Sync of Daily Calorie Logs (Meals & Activities) to Google Sheet
+ */
+export async function syncCaloriesToSheet(
+  accessToken: string,
+  spreadsheetId: string,
+  meals: CalorieMealLog[] = [],
+  activities: CalorieActivityLog[] = []
+) {
+  const cleanId = extractSpreadsheetId(spreadsheetId);
+  const rows: any[][] = [];
+
+  meals.forEach((m) => {
+    rows.push([
+      m.id,
+      m.date,
+      m.time,
+      `খাবার (${m.mealType.toUpperCase()})`,
+      m.foodName,
+      `${m.portion}x (${m.servingUnit || 'পরিমাণ'})`,
+      `+${m.calories}`,
+      m.protein || 0,
+      m.carbs || 0,
+      m.fat || 0,
+      m.notes || '',
+      new Date().toISOString(),
+    ]);
+  });
+
+  activities.forEach((a) => {
+    rows.push([
+      a.id,
+      a.date,
+      a.time,
+      'ব্যায়াম / পরিশ্রম (ACTIVITY)',
+      a.activityName,
+      `${a.durationMinutes} মিনিট (${a.intensity})`,
+      `-${a.caloriesBurned}`,
+      0,
+      0,
+      0,
+      a.notes || '',
+      new Date().toISOString(),
+    ]);
+  });
+
+  // Sort rows chronologically descending
+  rows.sort((a, b) => (b[1] + ' ' + b[2]).localeCompare(a[1] + ' ' + a[2]));
+
+  await fetch(`${SHEETS_BASE_URL}/${cleanId}/values/Daily_Calorie_Log!A2:L1000:clear`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (rows.length > 0) {
+    const targetRange = `Daily_Calorie_Log!A2:L${rows.length + 1}`;
+    const res = await fetch(
+      `${SHEETS_BASE_URL}/${cleanId}/values/${encodeURIComponent(targetRange)}?valueInputOption=USER_ENTERED`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          range: targetRange,
+          majorDimension: 'ROWS',
+          values: rows,
+        }),
+      }
+    );
+    if (!res.ok) {
+      const err = await res.text();
+      const parsed = parseGoogleApiError(err, res.status);
+      throw new Error(`Calorie Log sync notice: ${parsed.userMessage}`);
+    }
+  }
+}
+
+/**
  * Convenience orchestrator for complete two-way synchronization
  */
 export async function syncAllToSheet(
@@ -579,7 +678,9 @@ export async function syncAllToSheet(
   transactions: Transaction[],
   items: InventoryItem[],
   logs: InventoryLog[],
-  documents: CloudDocument[]
+  documents: CloudDocument[],
+  calorieMeals: CalorieMealLog[] = [],
+  calorieActivities: CalorieActivityLog[] = []
 ) {
   const cleanId = extractSpreadsheetId(spreadsheetId);
   if (!cleanId) {
@@ -599,6 +700,7 @@ export async function syncAllToSheet(
   await syncLedgerToSheet(accessToken, cleanId, transactions);
   await syncInventoryToSheet(accessToken, cleanId, items, logs);
   await syncDocumentsToSheet(accessToken, cleanId, documents);
+  await syncCaloriesToSheet(accessToken, cleanId, calorieMeals, calorieActivities);
 }
 
 /**

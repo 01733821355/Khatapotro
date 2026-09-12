@@ -30,7 +30,11 @@ import type {
   TransactionType,
   UserProfile,
   GoogleUser,
-  DailyExpenseLimit
+  DailyExpenseLimit,
+  CalorieMealLog,
+  CalorieActivityLog,
+  CalorieUserProfile,
+  CalorieReminder
 } from './types';
 
 // Components
@@ -46,6 +50,8 @@ import { DailyExpenseLimitModal } from './components/DailyExpenseLimitModal';
 import { ReportPage } from './components/ReportPage';
 import { LoanPage } from './components/LoanPage';
 import { LendingPage } from './components/LendingPage';
+import { CalorieMeterPage } from './components/CalorieMeterPage';
+import { LiveSyncIndicator } from './components/LiveSyncIndicator';
 import { FloatingNav } from './components/FloatingNav';
 import { FirstTimeRegistrationModal } from './components/FirstTimeRegistrationModal';
 import { DeleteAllDataModal } from './components/DeleteAllDataModal';
@@ -63,7 +69,8 @@ import {
   FileCheck,
   Trash2,
   CreditCard,
-  HandCoins
+  HandCoins,
+  Flame
 } from 'lucide-react';
 import { formatCurrency } from './utils/formatters';
 
@@ -82,6 +89,14 @@ export default function App() {
   const [documents, setDocuments] = useState<CloudDocument[]>(() => storageService.getDocuments());
   const [sheetConfig, setSheetConfig] = useState<SheetConfig>(() => storageService.getSheetConfig());
   const [dailyExpenseLimit, setDailyExpenseLimit] = useState<DailyExpenseLimit>(() => storageService.getDailyExpenseLimit());
+
+  // Calorie & Diet State
+  const [calorieMeals, setCalorieMeals] = useState<CalorieMealLog[]>(() => storageService.getCalorieMealLogs());
+  const [calorieActivities, setCalorieActivities] = useState<CalorieActivityLog[]>(() => storageService.getCalorieActivityLogs());
+  const [calorieProfile, setCalorieProfile] = useState<CalorieUserProfile>(() => storageService.getCalorieProfile());
+  const [calorieReminders, setCalorieReminders] = useState<CalorieReminder[]>(() => storageService.getCalorieReminders());
+  const [selectedCalorieDate, setSelectedCalorieDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [calorieWater, setCalorieWater] = useState<number>(() => storageService.getWaterGlasses(new Date().toISOString().slice(0, 10)));
 
   // UI States
   const [isSyncing, setIsSyncing] = useState(false);
@@ -142,7 +157,70 @@ export default function App() {
     storageService.saveSheetConfig(sheetConfig);
   }, [sheetConfig]);
 
-  // Real-Time Background Sync (synchronizes active state seamlessly with Google Sheets)
+  // Calorie local persistence
+  useEffect(() => {
+    storageService.saveCalorieMealLogs(calorieMeals);
+  }, [calorieMeals]);
+
+  useEffect(() => {
+    storageService.saveCalorieActivityLogs(calorieActivities);
+  }, [calorieActivities]);
+
+  useEffect(() => {
+    storageService.saveCalorieProfile(calorieProfile);
+  }, [calorieProfile]);
+
+  useEffect(() => {
+    storageService.saveCalorieReminders(calorieReminders);
+  }, [calorieReminders]);
+
+  useEffect(() => {
+    setCalorieWater(storageService.getWaterGlasses(selectedCalorieDate));
+  }, [selectedCalorieDate]);
+
+  // LIVE DATA AUTO-SYNC (No button tap needed):
+  // Automatically triggers 2 seconds after any changes in transactions, documents, or calorie logs
+  useEffect(() => {
+    if (!token || !sheetConfig.spreadsheetId || !sheetConfig.autoSync) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        setIsSyncing(true);
+        await syncAllToSheet(
+          token,
+          sheetConfig.spreadsheetId,
+          transactions,
+          inventory,
+          inventoryLogs,
+          documents,
+          calorieMeals,
+          calorieActivities
+        );
+        setSheetConfig((prev) => ({
+          ...prev,
+          lastSyncTime: new Date().toISOString(),
+        }));
+      } catch (err) {
+        console.debug('Live Auto-sync notice:', err);
+      } finally {
+        setIsSyncing(false);
+      }
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [
+    token, 
+    sheetConfig.spreadsheetId, 
+    sheetConfig.autoSync, 
+    transactions, 
+    inventory, 
+    inventoryLogs, 
+    documents,
+    calorieMeals,
+    calorieActivities
+  ]);
+
+  // Periodic fallback sync every 60 seconds
   useEffect(() => {
     if (!token || !sheetConfig.spreadsheetId || !sheetConfig.autoSync) return;
 
@@ -154,19 +232,21 @@ export default function App() {
           transactions,
           inventory,
           inventoryLogs,
-          documents
+          documents,
+          calorieMeals,
+          calorieActivities
         );
         setSheetConfig((prev) => ({
           ...prev,
           lastSyncTime: new Date().toISOString(),
         }));
       } catch (err) {
-        console.debug('Real-time sync background tick notice:', err);
+        console.debug('Periodic sync notice:', err);
       }
-    }, 45000);
+    }, 60000);
 
     return () => clearInterval(intervalId);
-  }, [token, sheetConfig.spreadsheetId, sheetConfig.autoSync, transactions, inventory, inventoryLogs, documents]);
+  }, [token, sheetConfig.spreadsheetId, sheetConfig.autoSync, transactions, inventory, inventoryLogs, documents, calorieMeals, calorieActivities]);
 
   const toggleLanguage = () => {
     const nextLang = language === 'bn' ? 'en' : 'bn';
@@ -405,7 +485,9 @@ export default function App() {
         transactions,
         inventory,
         inventoryLogs,
-        documents
+        documents,
+        calorieMeals,
+        calorieActivities
       );
 
       const updatedCfg: SheetConfig = {
@@ -470,7 +552,9 @@ export default function App() {
         transactions,
         inventory,
         inventoryLogs,
-        documents
+        documents,
+        calorieMeals,
+        calorieActivities
       );
 
       setTransactions((prev) => prev.map((t) => ({ ...t, syncedToSheets: true })));
@@ -532,7 +616,9 @@ export default function App() {
           transactions,
           inventory,
           inventoryLogs,
-          documents
+          documents,
+          calorieMeals,
+          calorieActivities
         );
         const finalConfig: SheetConfig = {
           ...newConfig,
@@ -883,9 +969,67 @@ export default function App() {
     showToast(language === 'bn' ? 'ডকুমেন্ট মুছে ফেলা হয়েছে' : 'Document deleted');
 
     if (token && sheetConfig.spreadsheetId) {
-      syncAllToSheet(token, sheetConfig.spreadsheetId, transactions, inventory, inventoryLogs, updated)
+      syncAllToSheet(token, sheetConfig.spreadsheetId, transactions, inventory, inventoryLogs, updated, calorieMeals, calorieActivities)
         .catch(console.warn);
     }
+  };
+
+  // Calorie & Diet Handlers
+  const handleAddMealLog = (newMeal: Omit<CalorieMealLog, 'id' | 'syncedToSheets'>) => {
+    const mealWithId: CalorieMealLog = {
+      ...newMeal,
+      id: 'meal_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      syncedToSheets: false,
+    };
+    setCalorieMeals((prev) => [mealWithId, ...prev]);
+    showToast(
+      language === 'bn'
+        ? `"${newMeal.foodName}" (+${newMeal.calories} kcal) সফলভাবে এন্ট্রি হয়েছে!`
+        : `"${newMeal.foodName}" logged (+${newMeal.calories} kcal)!`
+    );
+  };
+
+  const handleDeleteMealLog = (id: string) => {
+    setCalorieMeals((prev) => prev.filter((m) => m.id !== id));
+    showToast(language === 'bn' ? 'খাবার এন্ট্রি মুছে ফেলা হয়েছে' : 'Meal entry deleted');
+  };
+
+  const handleAddActivityLog = (newAct: Omit<CalorieActivityLog, 'id' | 'syncedToSheets'>) => {
+    const actWithId: CalorieActivityLog = {
+      ...newAct,
+      id: 'act_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      syncedToSheets: false,
+    };
+    setCalorieActivities((prev) => [actWithId, ...prev]);
+    showToast(
+      language === 'bn'
+        ? `কাজের হিসাব যোগ হয়েছে: -${newAct.caloriesBurned} kcal বার্ন!`
+        : `Activity logged: -${newAct.caloriesBurned} kcal burned!`
+    );
+  };
+
+  const handleDeleteActivityLog = (id: string) => {
+    setCalorieActivities((prev) => prev.filter((a) => a.id !== id));
+    showToast(language === 'bn' ? 'কাজের রেকর্ড মুছে ফেলা হয়েছে' : 'Activity record deleted');
+  };
+
+  const handleUpdateCalorieProfile = (updatedProfile: CalorieUserProfile) => {
+    setCalorieProfile(updatedProfile);
+    storageService.saveCalorieProfile(updatedProfile);
+    showToast(
+      language === 'bn' ? 'শারীরিক লক্ষ্য ও ডায়েট প্রোফাইল সংরক্ষিত হয়েছে' : 'Profile updated'
+    );
+  };
+
+  const handleToggleCalorieReminder = (id: string) => {
+    setCalorieReminders((prev) =>
+      prev.map((rem) => (rem.id === id ? { ...rem, enabled: !rem.enabled } : rem))
+    );
+  };
+
+  const handleUpdateWaterGlasses = (count: number) => {
+    setCalorieWater(count);
+    storageService.saveWaterGlasses(selectedCalorieDate, count);
   };
 
   // Recent 5 transactions matching user's photo
@@ -1051,6 +1195,37 @@ export default function App() {
               </button>
             </div>
 
+            {/* Quick Calorie Meter Summary Banner on Home */}
+            <div className="mb-6 p-3.5 bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-rose-500/10 border border-amber-200/80 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                  <Flame className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-900 truncate">
+                      {language === 'bn' ? 'দৈনিক ক্যালরি মিটার ও স্বাস্থ্য সহায়িকা' : 'Daily Calorie Meter'}
+                    </span>
+                    <span className="text-[10px] bg-orange-100 text-orange-700 font-bold px-1.5 py-0.5 rounded-full shrink-0">
+                      Live
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 truncate mt-0.5">
+                    {language === 'bn'
+                      ? 'সারাদিনের খাবার ও কাজের ক্যালরি, ডায়েট প্লান ও রিমাইন্ডার'
+                      : 'Track meals, calories burned, diet plans & reminders'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActivePage('calorie')}
+                className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 active:scale-95 text-white text-xs font-bold rounded-xl transition-all shadow-xs shrink-0"
+              >
+                {language === 'bn' ? 'মিটার দেখুন →' : 'View Meter →'}
+              </button>
+            </div>
+
             {/* 4. সর্বশেষ লেনদেন (Recent Transactions with "সব দেখুন ও এডিট") */}
             <RecentTransactions
               transactions={recentTransactionsList}
@@ -1152,6 +1327,29 @@ export default function App() {
               language={language}
             />
           </div>
+        )}
+
+        {/* 6. DAILY CALORIE METER & HEALTH PAGE VIEW */}
+        {activePage === 'calorie' && (
+          <CalorieMeterPage
+            mealLogs={calorieMeals}
+            activityLogs={calorieActivities}
+            calorieProfile={calorieProfile}
+            profile={calorieProfile}
+            reminders={calorieReminders}
+            selectedDate={selectedCalorieDate}
+            waterGlasses={calorieWater}
+            onSelectDate={(d) => setSelectedCalorieDate(d)}
+            onDateChange={(d) => setSelectedCalorieDate(d)}
+            onAddMealLog={handleAddMealLog}
+            onDeleteMealLog={handleDeleteMealLog}
+            onAddActivityLog={handleAddActivityLog}
+            onDeleteActivityLog={handleDeleteActivityLog}
+            onUpdateProfile={handleUpdateCalorieProfile}
+            onToggleReminder={handleToggleCalorieReminder}
+            onUpdateWaterGlasses={handleUpdateWaterGlasses}
+            language={language}
+          />
         )}
       </main>
 

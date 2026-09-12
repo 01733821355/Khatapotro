@@ -20,7 +20,97 @@ export interface Transaction {
   syncedToSheets?: boolean;
 }
 
-export type ActivePage = 'home' | 'report' | 'loans' | 'lending' | 'vault';
+export type ActivePage = 'home' | 'report' | 'loans' | 'lending' | 'vault' | 'calorie';
+
+export type FoodCategory =
+  | 'rice_bread' // ভাত, রুটি ও খিচুড়ি
+  | 'fish_meat_egg' // মাছ, মাংস ও ডিম
+  | 'vegetable_curry' // শাক-সবজি ও ভর্তা
+  | 'dal_legume' // ডাল ও ছোলা
+  | 'fruits' // ফলমূল
+  | 'snacks_street' // স্ন্যাক্স ও ভাজা-পোড়া
+  | 'sweets_dessert' // মিষ্টি ও ডেজার্ট
+  | 'beverage_milk' // পানীয়, চা ও দুধ
+  | 'biryani_fastfood'; // বিরিয়ানি ও ফাস্টফুড
+
+export interface CalorieFoodItem {
+  id: string;
+  nameBn: string;
+  nameEn: string;
+  category: FoodCategory;
+  categoryBn: string;
+  defaultServing: string; // e.g. "১ প্লেট (২৫০ গ্রাম)", "১টি মাঝারি", "১ বাটি"
+  calories: number; // kcal
+  protein: number; // grams
+  carbs: number; // grams
+  fat: number; // grams
+  portionGrams?: number;
+  popular?: boolean;
+}
+
+export type MealType = 'breakfast' | 'lunch' | 'snack' | 'dinner' | 'extra';
+
+export interface CalorieMealLog {
+  id: string;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm
+  mealType: MealType;
+  foodId?: string;
+  foodName: string;
+  portion: number; // multiplier e.g. 1, 1.5, 2
+  servingUnit: string;
+  calories: number; // total = base * portion
+  protein: number;
+  carbs: number;
+  fat: number;
+  notes?: string;
+  syncedToSheets?: boolean;
+}
+
+export interface ActivityItem {
+  id: string;
+  nameBn: string;
+  nameEn: string;
+  category: 'cardio' | 'work' | 'household' | 'sports';
+  calPer30Min: number; // for ~65kg adult average
+  unit: string;
+}
+
+export interface CalorieActivityLog {
+  id: string;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm
+  activityId?: string;
+  activityName: string;
+  durationMinutes: number;
+  caloriesBurned: number;
+  intensity: 'light' | 'moderate' | 'vigorous';
+  notes?: string;
+  syncedToSheets?: boolean;
+}
+
+export interface CalorieUserProfile {
+  age: number;
+  gender: 'male' | 'female';
+  weightKg: number;
+  heightFeet: number;
+  heightInches: number;
+  activityLevel: 'sedentary' | 'light' | 'moderate' | 'very_active';
+  goal: 'maintain' | 'lose' | 'gain';
+  targetDailyCalories: number;
+  targetDailyBurn: number;
+  waterGlassesTarget: number;
+}
+
+export interface CalorieReminder {
+  id: string;
+  titleBn: string;
+  titleEn: string;
+  time: string;
+  type: 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'water' | 'exercise' | 'sleep';
+  descriptionBn: string;
+  enabled: boolean;
+}
 
 export interface PersonDebtSummary {
   personName: string;

@@ -12,9 +12,11 @@ import {
   Settings,
   Trash2,
   Edit3,
-  Sliders
+  Sliders,
+  Flame
 } from 'lucide-react';
 import type { SheetConfig, ActivePage, Language, UserProfile, GoogleUser } from '../types';
+import { LiveSyncIndicator } from './LiveSyncIndicator';
 
 interface NavbarProps {
   user: GoogleUser | null;
@@ -66,8 +68,9 @@ export const Navbar = ({
     dangerZone: language === 'bn' ? 'সমস্ত ডেটা মুছুন' : 'Delete All Data',
   };
 
-  const navLinks: { id: ActivePage; labelBn: string; labelEn: string }[] = [
+  const navLinks: { id: ActivePage; labelBn: string; labelEn: string; icon?: any }[] = [
     { id: 'home', labelBn: 'ড্যাশবোর্ড', labelEn: 'Dashboard' },
+    { id: 'calorie', labelBn: 'ক্যালরি মিটার', labelEn: 'Calorie Meter' },
     { id: 'report', labelBn: 'সার্চ ও রিপোর্ট', labelEn: 'Reports' },
     { id: 'loans', labelBn: 'ঋণ হিসাব (দেনা)', labelEn: 'Loans' },
     { id: 'lending', labelBn: 'ধার হিসাব (পাওনা)', labelEn: 'Lending' },
@@ -128,43 +131,15 @@ export const Navbar = ({
 
           {/* Right Action Bar */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Google Sheets Status Pill */}
-            {sheetConfig.spreadsheetId ? (
-              <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-medium">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                <span>{t.connected}</span>
-                <a
-                  href={sheetConfig.spreadsheetUrl || `https://docs.google.com/spreadsheets/d/${sheetConfig.spreadsheetId}/edit`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="ml-1 text-emerald-600 hover:text-emerald-900 transition-colors inline-flex items-center"
-                  title={t.openSheet}
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={onOpenSyncModal}
-                className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-xs font-medium hover:bg-amber-100 transition-colors"
-              >
-                <CloudOff className="w-3.5 h-3.5 text-amber-600" />
-                <span>{t.notConnected}</span>
-              </button>
-            )}
-
-            {/* Quick Sync Button */}
-            <button
-              type="button"
-              onClick={onSync}
-              disabled={isSyncing}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-all disabled:opacity-60 shadow-xs"
-              title={t.syncSheet}
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-blue-600' : ''}`} />
-              <span className="hidden sm:inline">{isSyncing ? 'সিঙ্ক হচ্ছে...' : t.syncSheet}</span>
-            </button>
+            {/* Live Data Sync Indicator (Auto-Sync: No manual tap needed) */}
+            <LiveSyncIndicator
+              isSyncing={isSyncing}
+              user={user}
+              sheetConfig={sheetConfig}
+              lastSyncTime={sheetConfig.lastSyncTime}
+              language={language}
+              onOpenSyncModal={onOpenSyncModal}
+            />
 
             {/* Language Switcher */}
             <button

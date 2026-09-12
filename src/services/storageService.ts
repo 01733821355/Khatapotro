@@ -1,4 +1,17 @@
-import type { Transaction, InventoryItem, InventoryLog, CloudDocument, SheetConfig, UserProfile, DailyExpenseLimit } from '../types';
+import type { 
+  Transaction, 
+  InventoryItem, 
+  InventoryLog, 
+  CloudDocument, 
+  SheetConfig, 
+  UserProfile, 
+  DailyExpenseLimit,
+  CalorieMealLog,
+  CalorieActivityLog,
+  CalorieUserProfile,
+  CalorieReminder
+} from '../types';
+import { DEFAULT_CALORIE_REMINDERS } from '../data/bangladeshiFoods';
 
 const TRANSACTIONS_KEY = 'khatapotro_transactions_v4';
 const INVENTORY_KEY = 'khatapotro_inventory_v4';
@@ -9,6 +22,11 @@ const LANG_KEY = 'khatapotro_language_v4';
 const PROFILE_KEY = 'khatapotro_user_profile_v4';
 const IS_INITIALIZED_KEY = 'khatapotro_initialized_v4';
 const DAILY_LIMIT_KEY = 'khatapotro_daily_expense_limit_v1';
+const CALORIE_MEAL_LOGS_KEY = 'khatapotro_calorie_meals_v1';
+const CALORIE_ACTIVITY_LOGS_KEY = 'khatapotro_calorie_activities_v1';
+const CALORIE_PROFILE_KEY = 'khatapotro_calorie_profile_v1';
+const CALORIE_REMINDERS_KEY = 'khatapotro_calorie_reminders_v1';
+const CALORIE_WATER_KEY = 'khatapotro_calorie_water_v1';
 
 // Initial transactions matching user screenshot (23 records, 33,690 income, 24,807 expense, 8,883 balance)
 const INITIAL_TRANSACTIONS: Transaction[] = [
@@ -655,5 +673,107 @@ export const storageService = {
 
   saveDailyExpenseLimit(limit: DailyExpenseLimit) {
     localStorage.setItem(DAILY_LIMIT_KEY, JSON.stringify(limit));
+  },
+
+  // Calorie Meal Logs
+  getCalorieMealLogs(): CalorieMealLog[] {
+    try {
+      const data = localStorage.getItem(CALORIE_MEAL_LOGS_KEY);
+      if (data) return JSON.parse(data);
+    } catch (e) {
+      console.error('Failed to load calorie meal logs', e);
+    }
+    return [];
+  },
+
+  saveCalorieMealLogs(logs: CalorieMealLog[]) {
+    localStorage.setItem(CALORIE_MEAL_LOGS_KEY, JSON.stringify(logs));
+  },
+
+  // Calorie Activity Logs
+  getCalorieActivityLogs(): CalorieActivityLog[] {
+    try {
+      const data = localStorage.getItem(CALORIE_ACTIVITY_LOGS_KEY);
+      if (data) return JSON.parse(data);
+    } catch (e) {
+      console.error('Failed to load calorie activity logs', e);
+    }
+    return [];
+  },
+
+  saveCalorieActivityLogs(logs: CalorieActivityLog[]) {
+    localStorage.setItem(CALORIE_ACTIVITY_LOGS_KEY, JSON.stringify(logs));
+  },
+
+  // Calorie Profile & Goals
+  getCalorieProfile(): CalorieUserProfile {
+    const defaultProfile: CalorieUserProfile = {
+      age: 28,
+      gender: 'male',
+      weightKg: 68,
+      heightFeet: 5,
+      heightInches: 7,
+      activityLevel: 'moderate',
+      goal: 'maintain',
+      targetDailyCalories: 2100,
+      targetDailyBurn: 350,
+      waterGlassesTarget: 8,
+    };
+    try {
+      const data = localStorage.getItem(CALORIE_PROFILE_KEY);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (parsed && typeof parsed === 'object') {
+          return { ...defaultProfile, ...parsed };
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load calorie profile', e);
+    }
+    return defaultProfile;
+  },
+
+  saveCalorieProfile(profile: CalorieUserProfile) {
+    localStorage.setItem(CALORIE_PROFILE_KEY, JSON.stringify(profile));
+  },
+
+  // Calorie Reminders
+  getCalorieReminders(): CalorieReminder[] {
+    try {
+      const data = localStorage.getItem(CALORIE_REMINDERS_KEY);
+      if (data) return JSON.parse(data);
+    } catch (e) {
+      console.error('Failed to load calorie reminders', e);
+    }
+    return DEFAULT_CALORIE_REMINDERS;
+  },
+
+  saveCalorieReminders(reminders: CalorieReminder[]) {
+    localStorage.setItem(CALORIE_REMINDERS_KEY, JSON.stringify(reminders));
+  },
+
+  // Water Intake (glasses count per date)
+  getWaterGlasses(date: string): number {
+    try {
+      const data = localStorage.getItem(CALORIE_WATER_KEY);
+      if (data) {
+        const parsed = JSON.parse(data);
+        return typeof parsed[date] === 'number' ? parsed[date] : 0;
+      }
+    } catch {
+      // fallback
+    }
+    return 0;
+  },
+
+  saveWaterGlasses(date: string, count: number) {
+    try {
+      const data = localStorage.getItem(CALORIE_WATER_KEY);
+      const parsed = data ? JSON.parse(data) : {};
+      parsed[date] = Math.max(0, count);
+      localStorage.setItem(CALORIE_WATER_KEY, JSON.stringify(parsed));
+    } catch (e) {
+      console.error('Failed to save water intake', e);
+    }
   },
 };

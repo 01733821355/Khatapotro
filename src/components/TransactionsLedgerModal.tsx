@@ -22,6 +22,7 @@ interface TransactionsLedgerModalProps {
   isOpen: boolean;
   onClose: () => void;
   transactions: Transaction[];
+  documents?: any[];
   initialFilter?: 'all' | 'income' | 'expense' | 'debt' | 'lending';
   onEditTransaction: (tx: Transaction) => void;
   onDeleteTransaction: (id: string) => void;

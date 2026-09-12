@@ -11,7 +11,9 @@ import {
   Search,
   FolderOpen,
   Move,
-  RotateCcw
+  RotateCcw,
+  Flame,
+  GripVertical
 } from 'lucide-react';
 
 interface FloatingNavProps {
@@ -27,7 +29,7 @@ interface Position {
   y: number;
 }
 
-const STORAGE_KEY = 'khatapotro_fab_position_v1';
+const STORAGE_KEY = 'khatapotro_fab_position_v2';
 
 export const FloatingNav = ({
   activePage,
@@ -48,23 +50,23 @@ export const FloatingNav = ({
   });
 
   const [isDragging, setIsDragging] = useState(false);
-  const [isLongPressed, setIsLongPressed] = useState(false);
+  const [showDragHint, setShowDragHint] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const dragStartPosRef = useRef<{ startX: number; startY: number; initialX: number; initialY: number } | null>(null);
   const didDragRef = useRef(false);
 
-  // Keep inside screen boundaries on window resize
+  // Clamps position within screen viewport so it never goes off-screen,
+  // while allowing it to be placed anywhere including the dead center of the screen.
   const clampPosition = useCallback((x: number, y: number): Position => {
-    const width = containerRef.current?.offsetWidth || 180;
-    const height = containerRef.current?.offsetHeight || 60;
-    const padding = 12;
+    const width = containerRef.current?.offsetWidth || 160;
+    const height = containerRef.current?.offsetHeight || 56;
+    const padding = 8;
 
     const minX = padding;
     const maxX = Math.max(padding, window.innerWidth - width - padding);
-    const minY = 64; // below navbar
-    const maxY = Math.max(64, window.innerHeight - height - padding);
+    const minY = 56; // below the top header
+    const maxY = Math.max(minY, window.innerHeight - height - padding);
 
     return {
       x: Math.min(Math.max(x, minX), maxX),
@@ -72,6 +74,7 @@ export const FloatingNav = ({
     };
   }, []);
 
+  // Update bounds on window resize
   useEffect(() => {
     const handleResize = () => {
       if (position) {
@@ -82,13 +85,13 @@ export const FloatingNav = ({
     return () => window.removeEventListener('resize', handleResize);
   }, [position, clampPosition]);
 
-  // Handle pointer down (both touch and mouse)
+  // Pointer down handler for both touch and mouse
   const handlePointerDown = (clientX: number, clientY: number) => {
     didDragRef.current = false;
 
-    // Get current container position
+    // Get current container coordinates
     const rect = containerRef.current?.getBoundingClientRect();
-    const currentX = rect ? rect.left : window.innerWidth - 200;
+    const currentX = rect ? rect.left : window.innerWidth - 180;
     const currentY = rect ? rect.top : window.innerHeight - 80;
 
     dragStartPosRef.current = {
@@ -97,21 +100,9 @@ export const FloatingNav = ({
       initialX: currentX,
       initialY: currentY,
     };
-
-    // Trigger long press after 380ms
-    longPressTimerRef.current = setTimeout(() => {
-      setIsLongPressed(true);
-      setIsDragging(true);
-      if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        try {
-          navigator.vibrate(60);
-        } catch {
-          // ignore
-        }
-      }
-    }, 380);
   };
 
+  // Pointer move handler with instant responsiveness (> 6px movement)
   const handlePointerMove = useCallback((clientX: number, clientY: number) => {
     if (!dragStartPosRef.current) return;
 
@@ -119,47 +110,51 @@ export const FloatingNav = ({
     const deltaY = clientY - dragStartPosRef.current.startY;
     const distance = Math.hypot(deltaX, deltaY);
 
-    // If moved significantly before timer, cancel long press unless already dragging
-    if (distance > 10 && !isLongPressed) {
-      if (longPressTimerRef.current) {
-        clearTimeout(longPressTimerRef.current);
-        longPressTimerRef.current = null;
+    if (distance > 6) {
+      if (!isDragging) {
+        setIsDragging(true);
+        setShowDragHint(true);
+        // Subtle haptic feedback on mobile if supported
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          try {
+            navigator.vibrate(30);
+          } catch {
+            // ignore
+          }
+        }
       }
-    }
-
-    if (isDragging) {
       didDragRef.current = true;
       const newX = dragStartPosRef.current.initialX + deltaX;
       const newY = dragStartPosRef.current.initialY + deltaY;
       const clamped = clampPosition(newX, newY);
       setPosition(clamped);
     }
-  }, [isDragging, isLongPressed, clampPosition]);
+  }, [isDragging, clampPosition]);
 
+  // Pointer release handler
   const handlePointerUp = useCallback(() => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-
     if (isDragging) {
       setIsDragging(false);
-      setIsLongPressed(false);
+      setShowDragHint(false);
       if (position) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(position));
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(position));
+        } catch {
+          // ignore
+        }
       }
-      // Brief timeout to prevent firing onClick after dragging
+      // Brief debounce so a release does not trigger a button click
       setTimeout(() => {
         didDragRef.current = false;
-      }, 100);
+      }, 150);
     } else {
-      setIsLongPressed(false);
+      setShowDragHint(false);
     }
 
     dragStartPosRef.current = null;
   }, [isDragging, position]);
 
-  // Touch event listeners
+  // Touch event handlers
   const onTouchStart = (e: TouchEvent) => {
     const touch = e.touches[0];
     handlePointerDown(touch.clientX, touch.clientY);
@@ -174,9 +169,9 @@ export const FloatingNav = ({
     handlePointerUp();
   };
 
-  // Mouse event listeners
+  // Mouse event handlers
   const onMouseDown = (e: ReactMouseEvent) => {
-    if (e.button !== 0) return; // only left click
+    if (e.button !== 0) return; // Left-click only
     handlePointerDown(e.clientX, e.clientY);
 
     const onMouseMove = (moveEvent: MouseEvent) => {
@@ -194,34 +189,73 @@ export const FloatingNav = ({
   };
 
   // Reset to default bottom-right position
-  const handleResetPosition = (e: ReactMouseEvent) => {
-    e.stopPropagation();
-    localStorage.removeItem(STORAGE_KEY);
+  const handleResetPosition = (e?: ReactMouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // ignore
+    }
     setPosition(null);
-    setIsLongPressed(false);
     setIsDragging(false);
+    setShowDragHint(false);
   };
 
+  // Dynamic position-wise calculation for the menu:
+  // 1. Vertical: if button is in lower 55% of screen -> open UPWARDS. Otherwise -> open DOWNWARDS.
+  // 2. Horizontal:
+  //    - Left 32% of screen -> align left
+  //    - Right 68% of screen -> align right
+  //    - Middle (32% to 68%) -> center aligned directly with the button (perfect for center of screen!)
+  const windowHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
+  const windowWidth = typeof window !== 'undefined' ? window.innerWidth : 400;
+
+  const currentY = position?.y ?? (windowHeight - 90);
+  const currentX = position?.x ?? (windowWidth - 170);
+
+  const openDirection: 'up' | 'down' = currentY > windowHeight * 0.45 ? 'up' : 'down';
+
+  let horizontalAlign: 'left' | 'center' | 'right' = 'right';
+  if (currentX < windowWidth * 0.32) {
+    horizontalAlign = 'left';
+  } else if (currentX > windowWidth * 0.68) {
+    horizontalAlign = 'right';
+  } else {
+    horizontalAlign = 'center';
+  }
+
+  // Navigation Items
   const navItems = [
     {
       id: 'home' as ActivePage,
       labelBn: 'হোম ড্যাশবোর্ড',
-      labelEn: 'Home',
+      labelEn: 'Home Dashboard',
       icon: Home,
-      color: 'bg-slate-800 text-white hover:bg-slate-900',
+      badge: null,
+      color: 'bg-slate-900 text-white hover:bg-slate-800',
+    },
+    {
+      id: 'calorie' as ActivePage,
+      labelBn: 'ক্যালরি মিটার ও স্বাস্থ্য',
+      labelEn: 'Calorie Meter & Health',
+      icon: Flame,
+      badge: 'Live',
+      color: 'bg-amber-600 text-white hover:bg-amber-700',
     },
     {
       id: 'report' as ActivePage,
       labelBn: 'সার্চ ও রিপোর্ট',
-      labelEn: 'Report',
+      labelEn: 'Search & Reports',
       icon: Search,
+      badge: null,
       color: 'bg-indigo-600 text-white hover:bg-indigo-700',
     },
     {
       id: 'loans' as ActivePage,
       labelBn: 'ঋণ হিসাব (দেনা)',
-      labelEn: 'Loans (Debt)',
+      labelEn: 'Loans (Payable)',
       icon: CreditCard,
+      badge: null,
       color: 'bg-amber-600 text-white hover:bg-amber-700',
     },
     {
@@ -229,28 +263,27 @@ export const FloatingNav = ({
       labelBn: 'ধার হিসাব (পাওনা)',
       labelEn: 'Lending (Receivable)',
       icon: HandCoins,
+      badge: null,
       color: 'bg-blue-600 text-white hover:bg-blue-700',
     },
     {
       id: 'vault' as ActivePage,
-      labelBn: 'রসিদ ও ভল্ট',
-      labelEn: 'Receipt Vault',
+      labelBn: 'রসিদ ও ডকুমেন্ট ভল্ট',
+      labelEn: 'Receipt & Voucher Vault',
       icon: FolderOpen,
+      badge: null,
       color: 'bg-purple-600 text-white hover:bg-purple-700',
     },
   ];
 
-  // Calculate dynamic layout direction based on current screen position
-  const isTopHalf = position ? position.y < window.innerHeight / 2 : false;
-  const isLeftHalf = position ? position.x < window.innerWidth / 2 : false;
-
   return (
     <>
-      {/* Backdrop when menu is expanded */}
+      {/* Backdrop overlay when menu is open */}
       {isOpen && (
         <div
           onClick={() => setIsOpen(false)}
-          className="fixed inset-0 z-40 bg-slate-900/30 backdrop-blur-xs transition-opacity duration-200"
+          className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-xs transition-opacity duration-200"
+          aria-hidden="true"
         />
       )}
 
@@ -265,123 +298,178 @@ export const FloatingNav = ({
                 position: 'fixed',
               }
             : {
-                right: '20px',
+                right: '16px',
                 bottom: '20px',
                 position: 'fixed',
               }
         }
-        className={`z-50 flex ${
-          isTopHalf ? 'flex-col-reverse' : 'flex-col'
-        } ${isLeftHalf ? 'items-start' : 'items-end'} gap-2.5 print:hidden select-none touch-none ${
-          isDragging ? 'cursor-grabbing scale-105 transition-none' : 'transition-transform'
+        className={`z-50 print:hidden select-none touch-none transition-transform duration-75 ${
+          isDragging ? 'scale-105 cursor-grabbing' : 'cursor-default'
         }`}
       >
-        {/* Visual feedback tooltip while Long Pressing / Dragging */}
-        {(isLongPressed || isDragging) && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900 text-white text-[11px] font-bold shadow-2xl border border-blue-400 animate-bounce">
-            <Move className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+        {/* Dynamic Dragging Guide Tooltip */}
+        {(showDragHint || isDragging) && (
+          <div className="absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 text-white text-[11px] font-bold shadow-xl border border-blue-400 pointer-events-none animate-pulse">
+            <Move className="w-3.5 h-3.5 text-blue-400" />
             <span>
-              {language === 'bn' 
-                ? 'টেনে যেকোনো স্থানে বসান' 
-                : 'Drag anywhere to reposition'}
+              {language === 'bn'
+                ? 'স্ক্রিনের যেখানে ইচ্ছা টেনে রাখুন (মাঝখানেও রাখা যাবে)'
+                : 'Drag anywhere on screen (even in the center)'}
             </span>
-            {position && (
-              <button
-                type="button"
-                onClick={handleResetPosition}
-                className="ml-1 p-1 rounded-full hover:bg-slate-800 text-slate-300 hover:text-white"
-                title="Reset Position"
-              >
-                <RotateCcw className="w-3 h-3" />
-              </button>
-            )}
           </div>
         )}
 
-        {/* Expanded Navigation & Action Menu */}
+        {/* Position-Aware Navigation Menu Popup */}
         {isOpen && !isDragging && (
           <div
-            className={`flex flex-col ${
-              isLeftHalf ? 'items-start' : 'items-end'
-            } gap-2 ${isTopHalf ? 'mt-1' : 'mb-1'} animate-in slide-in-from-bottom-5 fade-in duration-200`}
+            className={`absolute z-50 w-[285px] max-w-[calc(100vw-24px)] max-h-[min(75vh,480px)] overflow-y-auto ${
+              openDirection === 'up' ? 'bottom-full mb-2.5' : 'top-full mt-2.5'
+            } ${
+              horizontalAlign === 'left'
+                ? 'left-0'
+                : horizontalAlign === 'center'
+                ? 'left-1/2 -translate-x-1/2'
+                : 'right-0'
+            } bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-3xl p-3 border border-slate-200/90 dark:border-slate-800 shadow-2xl animate-in fade-in zoom-in-95 duration-150 flex flex-col gap-2.5`}
           >
-            {/* Quick Action: Add Income */}
-            <button
-              type="button"
-              onClick={() => {
-                setIsOpen(false);
-                onOpenAddIncome();
-              }}
-              className="flex items-center gap-2.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-2xl shadow-lg font-bold text-xs transition-transform hover:scale-105"
-            >
-              <span>+ নতুন জমা যোগ</span>
-              <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center">
-                <Plus className="w-4 h-4 text-white" />
+            {/* Header: Menu Title & Position Indicator / Reset */}
+            <div className="flex items-center justify-between px-1 pb-1.5 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold">
+                  <Compass className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black text-slate-800 dark:text-white leading-none">
+                    {language === 'bn' ? 'ন্যাভিগেশন মেনু' : 'Navigation Menu'}
+                  </h3>
+                  <span className="text-[10px] text-slate-400 font-semibold">
+                    {horizontalAlign === 'center'
+                      ? (language === 'bn' ? 'পজিশন: স্ক্রিনের মাঝখানে' : 'Position: Screen Center')
+                      : horizontalAlign === 'left'
+                      ? (language === 'bn' ? 'পজিশন: বামে' : 'Position: Left Edge')
+                      : (language === 'bn' ? 'পজিশন: ডানে' : 'Position: Right Edge')}
+                  </span>
+                </div>
               </div>
-            </button>
 
-            {/* Quick Action: Add Expense */}
-            <button
-              type="button"
-              onClick={() => {
-                setIsOpen(false);
-                onOpenAddExpense();
-              }}
-              className="flex items-center gap-2.5 bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-2 rounded-2xl shadow-lg font-bold text-xs transition-transform hover:scale-105"
-            >
-              <span>- নতুন খরচ যোগ</span>
-              <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center">
-                <Minus className="w-4 h-4 text-white" />
-              </div>
-            </button>
-
-            <div className="w-full h-px bg-slate-200 my-1" />
-
-            {/* Page Navigation Links */}
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activePage === item.id;
-
-              return (
+              <div className="flex items-center gap-1">
+                {position && (
+                  <button
+                    type="button"
+                    onClick={() => handleResetPosition()}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 transition-colors"
+                    title={language === 'bn' ? 'ডিফল্ট নিচে-ডানে ফেরান' : 'Reset to default position'}
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                )}
                 <button
                   type="button"
-                  key={item.id}
-                  onClick={() => {
-                    setIsOpen(false);
-                    onNavigate(item.id);
-                  }}
-                  className={`flex items-center gap-2.5 px-3.5 py-2 rounded-2xl shadow-md font-semibold text-xs transition-all ${
-                    isActive
-                      ? `${item.color} ring-2 ring-offset-2 ring-blue-500 font-bold scale-105`
-                      : 'bg-white text-slate-800 hover:bg-slate-50 border border-slate-200'
-                  }`}
+                  onClick={() => setIsOpen(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  title="Close"
                 >
-                  <span>{language === 'bn' ? item.labelBn : item.labelEn}</span>
-                  <div
-                    className={`w-7 h-7 rounded-xl flex items-center justify-center ${
-                      isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Actions Grid (+জমা / -খরচ) */}
+            <div className="grid grid-cols-2 gap-2 pt-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  onOpenAddIncome();
+                }}
+                className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold shadow-xs transition-all"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{language === 'bn' ? '+ নতুন জমা' : '+ Add Income'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  onOpenAddExpense();
+                }}
+                className="flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-2xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-bold shadow-xs transition-all"
+              >
+                <Minus className="w-3.5 h-3.5" />
+                <span>{language === 'bn' ? '- নতুন খরচ' : '- Add Expense'}</span>
+              </button>
+            </div>
+
+            <div className="h-px bg-slate-100 dark:bg-slate-800 my-0.5" />
+
+            {/* Main Navigation Items List */}
+            <div className="space-y-1.5">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activePage === item.id;
+
+                return (
+                  <button
+                    type="button"
+                    key={item.id}
+                    onClick={() => {
+                      setIsOpen(false);
+                      onNavigate(item.id);
+                    }}
+                    className={`w-full flex items-center justify-between p-2 rounded-2xl text-xs font-bold transition-all ${
+                      isActive
+                        ? `${item.color} shadow-sm ring-2 ring-blue-400 dark:ring-blue-500 scale-[1.01]`
+                        : 'bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200/50 dark:border-slate-700/50'
                     }`}
                   >
-                    <Icon className="w-4 h-4" />
-                  </div>
-                </button>
-              );
-            })}
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div
+                        className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${
+                          isActive
+                            ? 'bg-white/20 text-white'
+                            : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 shadow-2xs'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4" />
+                      </div>
+                      <span className="truncate">
+                        {language === 'bn' ? item.labelBn : item.labelEn}
+                      </span>
+                    </div>
+
+                    {item.badge && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-400 text-amber-950 font-black shrink-0 shadow-2xs">
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 
-        {/* Floating Action Cluster: Quick +জমা, -খরচ & Primary FAB Toggle */}
+        {/* Floating Master Bar (Draggable anywhere, with grip & instant actions) */}
         <div
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
           onMouseDown={onMouseDown}
-          className={`flex items-center gap-2 p-1 rounded-3xl transition-all ${
+          className={`flex items-center gap-1.5 p-1 rounded-full backdrop-blur-md transition-all shadow-xl ${
             isDragging
-              ? 'ring-4 ring-blue-500/50 bg-blue-50/50 shadow-2xl scale-110'
-              : 'hover:shadow-lg'
+              ? 'bg-blue-600/90 ring-4 ring-blue-400/60 scale-110 shadow-2xl cursor-grabbing'
+              : 'bg-slate-900/90 hover:bg-slate-900 border border-white/20 cursor-grab hover:scale-[1.02]'
           }`}
         >
+          {/* Visual Drag Handle Pill */}
+          <div
+            className="flex items-center justify-center pl-2 pr-1 py-1 text-slate-400 hover:text-white cursor-grab active:cursor-grabbing shrink-0"
+            title={language === 'bn' ? 'টেনে স্ক্রিনের যেকোনো জায়গায় বসান' : 'Drag anywhere to reposition'}
+          >
+            <GripVertical className="w-4 h-4" />
+          </div>
+
           {!isOpen && (
             <>
               {/* Quick Income Button */}
@@ -392,11 +480,11 @@ export const FloatingNav = ({
                   e.stopPropagation();
                   onOpenAddIncome();
                 }}
-                className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-3 py-2.5 rounded-2xl shadow-lg text-xs font-bold transition-transform"
-                title="নতুন জমা"
+                className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white px-2.5 py-1.5 rounded-full text-xs font-bold transition-all shadow-xs shrink-0"
+                title={language === 'bn' ? 'নতুন জমা যোগ' : 'Add Income'}
               >
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">জমা</span>
+                <Plus className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{language === 'bn' ? 'জমা' : 'Income'}</span>
               </button>
 
               {/* Quick Expense Button */}
@@ -407,16 +495,16 @@ export const FloatingNav = ({
                   e.stopPropagation();
                   onOpenAddExpense();
                 }}
-                className="flex items-center gap-1 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white px-3 py-2.5 rounded-2xl shadow-lg text-xs font-bold transition-transform"
-                title="নতুন খরচ"
+                className="flex items-center gap-1 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white px-2.5 py-1.5 rounded-full text-xs font-bold transition-all shadow-xs shrink-0"
+                title={language === 'bn' ? 'নতুন খরচ যোগ' : 'Add Expense'}
               >
-                <Minus className="w-4 h-4" />
-                <span className="hidden sm:inline">খরচ</span>
+                <Minus className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{language === 'bn' ? 'খরচ' : 'Expense'}</span>
               </button>
             </>
           )}
 
-          {/* Master Floating Navigation Button */}
+          {/* Master Speed-Dial FAB Toggle Button */}
           <button
             type="button"
             onClick={(e) => {
@@ -424,21 +512,18 @@ export const FloatingNav = ({
               e.stopPropagation();
               setIsOpen(!isOpen);
             }}
-            className={`relative w-12 h-12 rounded-2xl shadow-xl flex items-center justify-center transition-all duration-200 active:scale-95 cursor-grab active:cursor-grabbing ${
+            className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 shrink-0 ${
               isOpen
-                ? 'bg-slate-900 text-white rotate-90'
-                : 'bg-gradient-to-tr from-blue-600 to-indigo-600 text-white hover:shadow-blue-500/25'
-            } ${isDragging ? 'ring-2 ring-white scale-105' : ''}`}
-            aria-label="Toggle Navigation Menu (Long tap to move)"
-            title={language === 'bn' ? 'লং ট্যাপ করে পজিশন পরিবর্তন করুন' : 'Long tap & drag to reposition'}
+                ? 'bg-rose-500 text-white rotate-90 shadow-md'
+                : 'bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md'
+            }`}
+            aria-label="Toggle Navigation Menu"
+            title={language === 'bn' ? 'মেনু খুলুন / টগল করুন' : 'Toggle Menu'}
           >
-            {isOpen ? <X className="w-6 h-6" /> : <Compass className="w-6 h-6 animate-pulse" />}
-            
-            {/* Small subtle drag hint indicator */}
+            {isOpen ? <X className="w-5 h-5" /> : <Compass className="w-5 h-5" />}
+
             {!isOpen && (
-              <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-blue-400 border-2 border-white flex items-center justify-center">
-                <span className="w-1 h-1 rounded-full bg-white animate-ping" />
-              </span>
+              <span className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-slate-900" />
             )}
           </button>
         </div>
