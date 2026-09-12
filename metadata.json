@@ -1,6 +1,6 @@
 {
   "name": "KhataPotro Cloud & Inventory",
-  "description": "Smart expense and income tracker, daily calorie meter & Bangladeshi food diet planner, cloud document vault, and live automatic sync to Google Sheets.",
+  "description": "Smart expense and income tracker, AI-powered daily calorie meter & Bangladeshi food diet planner, cloud document vault, and live automatic sync to Google Sheets.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

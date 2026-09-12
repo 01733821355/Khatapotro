@@ -21,8 +21,11 @@ import {
   Zap,
   Info,
   Apple,
-  Dumbbell
+  Dumbbell,
+  Loader2,
+  Wand2
 } from 'lucide-react';
+import { estimateFoodCalories } from '../services/aiCalorieService';
 import type { 
   Language, 
   CalorieMealLog, 
@@ -118,6 +121,16 @@ export const CalorieMeterPage: React.FC<CalorieMeterPageProps> = ({
   const [customFoodPortion, setCustomFoodPortion] = useState('1');
   const [selectedServingPortion, setSelectedServingPortion] = useState<number>(1);
   const [activeFoodToLog, setActiveFoodToLog] = useState<CalorieFoodItem | null>(null);
+
+  // AI Calorie Auto-Calculation States
+  const [isAiCalculating, setIsAiCalculating] = useState(false);
+  const [aiProtein, setAiProtein] = useState<number>(0);
+  const [aiCarbs, setAiCarbs] = useState<number>(0);
+  const [aiFat, setAiFat] = useState<number>(0);
+  const [aiServingUnit, setAiServingUnit] = useState<string>('পরিমাণমতো');
+  const [aiExplanation, setAiExplanation] = useState<string>('');
+  const [aiCalculatedFor, setAiCalculatedFor] = useState<string>('');
+  const [aiError, setAiError] = useState<string | null>(null);
 
   // Activity logging state
   const [isAddActivityOpen, setIsAddActivityOpen] = useState(false);
@@ -249,6 +262,31 @@ export const CalorieMeterPage: React.FC<CalorieMeterPageProps> = ({
     setIsAddFoodOpen(false);
   };
 
+  // AI Triggered Calorie and Nutrition Calculation
+  const handleCalculateWithAi = async (overrideFoodName?: string) => {
+    const query = (overrideFoodName !== undefined ? overrideFoodName : customFoodName).trim();
+    if (!query) return;
+
+    setIsAiCalculating(true);
+    setAiError(null);
+    try {
+      const mult = parseFloat(customFoodPortion) || 1;
+      const res = await estimateFoodCalories(query, mult, language);
+      setCustomFoodCal(String(res.calories));
+      setAiProtein(res.protein);
+      setAiCarbs(res.carbs);
+      setAiFat(res.fat);
+      setAiServingUnit(res.servingUnit);
+      setAiExplanation(res.explanation || '');
+      setAiCalculatedFor(query);
+    } catch (err: any) {
+      console.error('AI calculation failed', err);
+      setAiError(err.message || (language === 'bn' ? 'ক্যালরি বের করা সম্ভব হয়নি' : 'Could not calculate calories'));
+    } finally {
+      setIsAiCalculating(false);
+    }
+  };
+
   // Handle Custom Food Log
   const handleAddCustomFood = (e: React.FormEvent) => {
     e.preventDefault();
@@ -259,22 +297,33 @@ export const CalorieMeterPage: React.FC<CalorieMeterPageProps> = ({
     const total = Math.round(baseCal * portion);
     const currentTime = new Date().toTimeString().slice(0, 5);
 
+    const isAiPowered = aiCalculatedFor.trim().toLowerCase() === customFoodName.trim().toLowerCase();
+
     onAddMealLog({
       date: selectedDate,
       time: currentTime,
       mealType: selectedMealType,
       foodName: customFoodName.trim(),
       portion: portion,
-      servingUnit: 'পরিমাণমতো',
+      servingUnit: aiServingUnit || 'পরিমাণমতো',
       calories: total,
-      protein: 0,
-      carbs: 0,
-      fat: 0,
-      notes: 'কাস্টম এন্ট্রি',
+      protein: isAiPowered ? Math.round(aiProtein * portion * 10) / 10 : 0,
+      carbs: isAiPowered ? Math.round(aiCarbs * portion * 10) / 10 : 0,
+      fat: isAiPowered ? Math.round(aiFat * portion * 10) / 10 : 0,
+      notes: isAiPowered 
+        ? `✨ AI হিসাব: ${aiServingUnit || 'পরিমাণমতো'}${aiExplanation ? ` (${aiExplanation.slice(0, 40)}...)` : ''}` 
+        : 'কাস্টম এন্ট্রি',
     });
 
     setCustomFoodName('');
     setCustomFoodCal('');
+    setAiProtein(0);
+    setAiCarbs(0);
+    setAiFat(0);
+    setAiServingUnit('পরিমাণমতো');
+    setAiExplanation('');
+    setAiCalculatedFor('');
+    setAiError(null);
     setCustomFoodMode(false);
     setIsAddFoodOpen(false);
   };
@@ -643,27 +692,41 @@ export const CalorieMeterPage: React.FC<CalorieMeterPageProps> = ({
             </div>
           </div>
 
-          {/* Quick Action Buttons: Log Food vs Log Work/Activity */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          {/* Quick Action Buttons: Log Food vs AI Custom Food vs Log Work/Activity */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <button
               type="button"
               onClick={() => {
+                setCustomFoodMode(false);
                 setIsAddFoodOpen(true);
                 setFoodSearchQuery('');
               }}
-              className="flex-1 py-3.5 px-5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold rounded-2xl shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition-all transform active:scale-98"
+              className="py-3.5 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold rounded-2xl shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 transition-all transform active:scale-98 cursor-pointer text-xs sm:text-sm"
             >
-              <Plus className="w-5 h-5 stroke-[2.5]" />
-              <span>{language === 'bn' ? '+ খাবার এন্ট্রি দিন (বাংলাদেশি মেনু)' : '+ Log Meal / Food'}</span>
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>{language === 'bn' ? 'খাবার লাইব্রেরি মেনু' : 'Food Library Menu'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setCustomFoodMode(true);
+                setIsAddFoodOpen(true);
+                setFoodSearchQuery('');
+              }}
+              className="py-3.5 px-4 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold rounded-2xl shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 transition-all transform active:scale-98 cursor-pointer text-xs sm:text-sm"
+            >
+              <Sparkles className="w-4 h-4 text-amber-200 animate-pulse" />
+              <span>{language === 'bn' ? '✨ AI দিয়ে ক্যালরি বের করুন' : '✨ AI Calorie Calculator'}</span>
             </button>
 
             <button
               type="button"
               onClick={() => setIsAddActivityOpen(true)}
-              className="flex-1 py-3.5 px-5 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-bold rounded-2xl shadow-lg shadow-rose-500/20 flex items-center justify-center gap-2 transition-all transform active:scale-98"
+              className="py-3.5 px-4 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-bold rounded-2xl shadow-md shadow-rose-500/20 flex items-center justify-center gap-2 transition-all transform active:scale-98 cursor-pointer text-xs sm:text-sm"
             >
-              <Activity className="w-5 h-5 stroke-[2.5]" />
-              <span>{language === 'bn' ? '+ কাজের হিসাব ও ক্যালরি বার্ন যোগ করুন' : '+ Log Work / Burn'}</span>
+              <Activity className="w-4 h-4 stroke-[2.5]" />
+              <span>{language === 'bn' ? 'ক্যালরি বার্ন ও কাজ যোগ' : 'Burn & Activity'}</span>
             </button>
           </div>
 
@@ -1155,28 +1218,175 @@ export const CalorieMeterPage: React.FC<CalorieMeterPageProps> = ({
             {/* Content Area */}
             <div className="flex-1 overflow-y-auto p-4">
               {customFoodMode ? (
-                /* Custom Food Form */
+                /* Custom Food Form with Gemini AI Integration */
                 <form onSubmit={handleAddCustomFood} className="space-y-4 max-w-md mx-auto py-2">
-                  <div className="p-3.5 bg-amber-50 rounded-2xl text-xs text-amber-800 font-medium">
-                    {language === 'bn'
-                      ? 'তালিকার বাইরের কোনো খাবার খেলে এখানে নাম ও আনুমানিক ক্যালরি লিখে যোগ করতে পারেন।'
-                      : 'Log any custom food with your estimated calorie figure.'}
+                  {/* AI Feature Header Banner */}
+                  <div className="p-3.5 bg-gradient-to-br from-amber-50 to-orange-50/70 border border-amber-200/80 rounded-2xl">
+                    <div className="flex items-center gap-2 text-amber-900 font-bold text-xs sm:text-sm">
+                      <Sparkles className="w-4 h-4 text-amber-600 animate-pulse" />
+                      <span>{language === 'bn' ? 'AI অটো ক্যালরি ক্যালকুলেটর' : 'AI Smart Calorie Estimator'}</span>
+                    </div>
+                    <p className="text-[11px] text-amber-800/90 mt-1 leading-relaxed">
+                      {language === 'bn'
+                        ? 'খাবারের নাম লিখে "AI হিসাব করুন" বাটনে চাপ দিন। Gemini AI খাবারটির সঠিক ক্যালরি, প্রোটিন, কার্বস ও ফ্যাট স্বয়ংক্রিয়ভাবে বের করে দেবে।'
+                        : 'Type any custom meal or food name. Gemini AI will automatically calculate the calories and nutrition breakdown.'}
+                    </p>
+
+                    {/* Quick Suggestion Chips */}
+                    <div className="mt-2.5 pt-2 border-t border-amber-200/60">
+                      <span className="text-[10px] font-bold text-amber-700 block mb-1.5">
+                        {language === 'bn' ? '⚡ দ্রুত ট্রাই করতে যেকোনো একটিতে ট্যাপ করুন:' : '⚡ Tap any common meal to auto-calculate:'}
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          '১ প্লেট কাচ্চি বিরিয়ানি',
+                          '২টি পরোটা ও ভাজি',
+                          '১ বাটি হালিম',
+                          '১ কাপ দুধ চা',
+                          'ভুনা খিচুড়ি ও ডিম',
+                          '৬টি ফুচকা',
+                          '১টি চকলেট কেক স্লাইস',
+                        ].map((suggestion) => (
+                          <button
+                            key={suggestion}
+                            type="button"
+                            onClick={() => {
+                              setCustomFoodName(suggestion);
+                              handleCalculateWithAi(suggestion);
+                            }}
+                            className="px-2 py-0.5 rounded-lg bg-white/90 border border-amber-300/80 text-[10px] font-semibold text-amber-900 hover:bg-amber-100 hover:border-amber-400 transition-colors cursor-pointer"
+                          >
+                            + {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
 
+                  {/* Food Name Field + AI Action Button */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      {language === 'bn' ? 'খাবারের নাম *' : 'Food Name *'}
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="যেমন: বাড়ির তৈরি পায়েস বা স্পেশাল খাবার"
-                      value={customFoodName}
-                      onChange={(e) => setCustomFoodName(e.target.value)}
-                      className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-slate-700">
+                        {language === 'bn' ? 'খাবারের নাম বা বিবরণ *' : 'Food Name or Description *'}
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handleCalculateWithAi()}
+                        disabled={isAiCalculating || !customFoodName.trim()}
+                        className={`text-[11px] font-bold flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                          isAiCalculating || !customFoodName.trim()
+                            ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                            : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-xs'
+                        }`}
+                      >
+                        {isAiCalculating ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            <span>{language === 'bn' ? 'হিসাব হচ্ছে...' : 'Analyzing...'}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Wand2 className="w-3 h-3" />
+                            <span>{language === 'bn' ? '✨ AI দিয়ে ক্যালরি বের করুন' : '✨ Auto Calculate AI'}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="relative">
+                      <input
+                        type="text"
+                        required
+                        placeholder={
+                          language === 'bn'
+                            ? 'যেমন: ১ প্লেট কাচ্চি বিরিয়ানি বা ২ পরোটা ডিম ভাজি'
+                            : 'e.g. 1 plate chicken biryani or 2 parathas with fried egg'
+                        }
+                        value={customFoodName}
+                        onChange={(e) => setCustomFoodName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (!customFoodCal && customFoodName.trim()) {
+                              handleCalculateWithAi();
+                            }
+                          }
+                        }}
+                        className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-amber-500 bg-white"
+                      />
+                    </div>
                   </div>
 
+                  {/* AI Loading State Banner */}
+                  {isAiCalculating && (
+                    <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl flex items-center gap-3 animate-pulse">
+                      <Loader2 className="w-4 h-4 text-amber-600 animate-spin shrink-0" />
+                      <div className="text-xs text-amber-900 font-medium">
+                        <span>
+                          {language === 'bn'
+                            ? `Gemini AI দিয়ে "${customFoodName}" এর ক্যালরি ও পুষ্টি তথ্য হিসাব করা হচ্ছে...`
+                            : `Calculating calories & nutrition for "${customFoodName}" via Gemini AI...`}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* AI Error Banner */}
+                  {aiError && (
+                    <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center justify-between">
+                      <span>{aiError}</span>
+                      <button
+                        type="button"
+                        onClick={() => setAiError(null)}
+                        className="text-rose-500 hover:text-rose-700 font-bold ml-2"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+
+                  {/* AI Calculated Result Card */}
+                  {aiCalculatedFor && customFoodCal && !isAiCalculating && (
+                    <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          <span>{language === 'bn' ? 'AI ক্যালকুলেশন সম্পন্ন' : 'AI Calculated Successfully'}</span>
+                        </span>
+                        <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md">
+                          {aiServingUnit}
+                        </span>
+                      </div>
+
+                      {/* Macronutrients Grid */}
+                      <div className="grid grid-cols-4 gap-2 pt-1 text-center">
+                        <div className="p-1.5 bg-white/80 rounded-xl border border-emerald-100">
+                          <span className="text-[10px] text-slate-500 block">ক্যালরি</span>
+                          <span className="text-xs font-black text-emerald-700">{customFoodCal} kcal</span>
+                        </div>
+                        <div className="p-1.5 bg-white/80 rounded-xl border border-emerald-100">
+                          <span className="text-[10px] text-slate-500 block">প্রোটিন</span>
+                          <span className="text-xs font-bold text-slate-800">{aiProtein}g</span>
+                        </div>
+                        <div className="p-1.5 bg-white/80 rounded-xl border border-emerald-100">
+                          <span className="text-[10px] text-slate-500 block">কার্বস</span>
+                          <span className="text-xs font-bold text-slate-800">{aiCarbs}g</span>
+                        </div>
+                        <div className="p-1.5 bg-white/80 rounded-xl border border-emerald-100">
+                          <span className="text-[10px] text-slate-500 block">ফ্যাট</span>
+                          <span className="text-xs font-bold text-slate-800">{aiFat}g</span>
+                        </div>
+                      </div>
+
+                      {aiExplanation && (
+                        <p className="text-[11px] text-slate-600 italic bg-white/60 p-2 rounded-lg leading-relaxed">
+                          💡 {aiExplanation}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Manual / AI Calories & Portion Fields */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -1188,7 +1398,7 @@ export const CalorieMeterPage: React.FC<CalorieMeterPageProps> = ({
                         placeholder="যেমন: 250"
                         value={customFoodCal}
                         onChange={(e) => setCustomFoodCal(e.target.value)}
-                        className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                        className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-amber-500 bg-white"
                       />
                     </div>
                     <div>
@@ -1198,34 +1408,98 @@ export const CalorieMeterPage: React.FC<CalorieMeterPageProps> = ({
                       <select
                         value={customFoodPortion}
                         onChange={(e) => setCustomFoodPortion(e.target.value)}
-                        className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                        className="w-full px-3.5 py-2 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-amber-500 bg-white text-slate-800"
                       >
                         <option value="0.5">অর্ধেক (০.৫x)</option>
                         <option value="1">স্বাভাবিক (১x)</option>
                         <option value="1.5">দেড়গুণ (১.৫x)</option>
                         <option value="2">দ্বিগুণ (২x)</option>
+                        <option value="3">তিনগুণ (৩x)</option>
                       </select>
                     </div>
                   </div>
 
+                  {/* Calculated Total Display */}
+                  {customFoodCal && (
+                    <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs font-semibold text-slate-700">
+                      <span>{language === 'bn' ? 'মোট ক্যালরি ট্র্যাকিংয়ে যাবে:' : 'Total calories to log:'}</span>
+                      <span className="text-amber-600 font-black text-sm">
+                        +{Math.round((parseFloat(customFoodCal) || 0) * (parseFloat(customFoodPortion) || 1))} kcal
+                      </span>
+                    </div>
+                  )}
+
                   <button
                     type="submit"
-                    className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-md transition-colors"
+                    disabled={!customFoodName.trim() || !customFoodCal}
+                    className={`w-full py-3 text-white font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                      !customFoodName.trim() || !customFoodCal
+                        ? 'bg-slate-300 cursor-not-allowed'
+                        : 'bg-amber-500 hover:bg-amber-600 active:scale-98'
+                    }`}
                   >
-                    {language === 'bn' ? 'ক্যালরি ট্র্যাকিংয়ে যোগ করুন' : 'Add to Tracker'}
+                    <Plus className="w-4 h-4" />
+                    <span>{language === 'bn' ? 'ক্যালরি ট্র্যাকিংয়ে যোগ করুন' : 'Add to Tracker'}</span>
                   </button>
                 </form>
               ) : (
                 /* Food Items Grid */
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {filteredFoods.length === 0 ? (
-                    <div className="col-span-2 text-center py-10 text-slate-400 text-xs">
-                      {language === 'bn'
-                        ? 'কোনো খাবার পাওয়া যায়নি। আপনি চাইলে উপরের "+ কাস্টম খাবার" বাটনে চাপ দিয়ে যোগ করতে পারেন।'
-                        : 'No food items matched your search.'}
+                <div className="space-y-3">
+                  {/* Quick AI Search Integration Banner */}
+                  {foodSearchQuery.trim().length > 0 && (
+                    <div className="p-3 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-xs font-bold text-amber-900">
+                        <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>
+                          {language === 'bn'
+                            ? `"${foodSearchQuery}" এর ক্যালরি সরাসরি AI দিয়ে বের করতে চান?`
+                            : `Want to calculate calories for "${foodSearchQuery}" with AI?`}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const q = foodSearchQuery.trim();
+                          setCustomFoodName(q);
+                          setCustomFoodMode(true);
+                          handleCalculateWithAi(q);
+                        }}
+                        className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xs font-bold rounded-xl shadow-xs transition-all shrink-0 flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <Wand2 className="w-3.5 h-3.5" />
+                        <span>{language === 'bn' ? '✨ AI দিয়ে হিসাব করুন' : '✨ Calculate with AI'}</span>
+                      </button>
                     </div>
-                  ) : (
-                    filteredFoods.map((food) => (
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {filteredFoods.length === 0 ? (
+                      <div className="col-span-2 text-center py-10 bg-slate-50/60 rounded-2xl border border-dashed border-slate-200 p-6">
+                        <p className="text-slate-500 text-xs sm:text-sm font-medium">
+                          {language === 'bn'
+                            ? `লাইব্রেরিতে "${foodSearchQuery}" সরাসরি পাওয়া যায়নি।`
+                            : `No item found matching "${foodSearchQuery}".`}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const q = foodSearchQuery.trim();
+                            setCustomFoodName(q);
+                            setCustomFoodMode(true);
+                            if (q) handleCalculateWithAi(q);
+                          }}
+                          className="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl text-xs font-bold shadow-md hover:from-amber-600 hover:to-orange-600 transition-all cursor-pointer"
+                        >
+                          <Sparkles className="w-4 h-4" />
+                          <span>
+                            {language === 'bn'
+                              ? `AI দিয়ে "${foodSearchQuery || 'কাস্টম খাবার'}" এর ক্যালরি বের করুন`
+                              : `Calculate with AI`}
+                          </span>
+                        </button>
+                      </div>
+                    ) : (
+                      filteredFoods.map((food) => (
                       <div
                         key={food.id}
                         className="p-3.5 rounded-2xl border border-slate-200 hover:border-amber-400 bg-white hover:bg-amber-50/20 transition-all flex flex-col justify-between"
@@ -1292,6 +1566,7 @@ export const CalorieMeterPage: React.FC<CalorieMeterPageProps> = ({
                       </div>
                     ))
                   )}
+                  </div>
                 </div>
               )}
             </div>
