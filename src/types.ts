@@ -20,7 +20,39 @@ export interface Transaction {
   syncedToSheets?: boolean;
 }
 
-export type ActivePage = 'home' | 'report' | 'loans' | 'lending' | 'vault' | 'calorie';
+export type ActivePage = 'home' | 'report' | 'loans' | 'lending' | 'vault' | 'calorie' | 'whatsapp';
+
+export interface WhatsAppChecklistItem {
+  id: string;
+  text: string;
+  checked: boolean;
+  category?: string;
+  amount?: number;
+}
+
+export interface B2BAuthorizationData {
+  id: string;
+  customerName: string;
+  businessName: string;
+  companyName: string;
+  dealerCode: string;
+  vcnCardNumber: string;
+  transactionAmount: number;
+  validity: string;
+  expiryDateTime: string;
+  purpose: string;
+  attachedFileName: string;
+  filePassword: string;
+  officerName: string;
+  officerTitle: string;
+  officerDepartment: string;
+  bankName: string;
+  bankBranch: string;
+  ipPhone: string;
+  officerMobile: string;
+  officerEmail: string;
+  createdAt: string;
+}
 
 export type FoodCategory =
   | 'rice_bread' // ভাত, রুটি ও খিচুড়ি

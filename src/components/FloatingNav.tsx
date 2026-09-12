@@ -13,7 +13,8 @@ import {
   Move,
   RotateCcw,
   Flame,
-  GripVertical
+  GripVertical,
+  MessageSquare
 } from 'lucide-react';
 
 interface FloatingNavProps {
@@ -273,6 +274,14 @@ export const FloatingNav = ({
       icon: FolderOpen,
       badge: null,
       color: 'bg-purple-600 text-white hover:bg-purple-700',
+    },
+    {
+      id: 'whatsapp' as ActivePage,
+      labelBn: 'WA Sender+ (চেকলিস্ট ও টুলস)',
+      labelEn: 'WA Sender+ (Checklist & Tools)',
+      icon: MessageSquare,
+      badge: 'Plus',
+      color: 'bg-gradient-to-r from-purple-600 to-emerald-600 text-white hover:opacity-95',
     },
   ];
 

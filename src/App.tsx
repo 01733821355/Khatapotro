@@ -51,6 +51,7 @@ import { ReportPage } from './components/ReportPage';
 import { LoanPage } from './components/LoanPage';
 import { LendingPage } from './components/LendingPage';
 import { CalorieMeterPage } from './components/CalorieMeterPage';
+import { WhatsAppSenderPage } from './components/WhatsAppSenderPage';
 import { LiveSyncIndicator } from './components/LiveSyncIndicator';
 import { FloatingNav } from './components/FloatingNav';
 import { FirstTimeRegistrationModal } from './components/FirstTimeRegistrationModal';
@@ -70,7 +71,8 @@ import {
   Trash2,
   CreditCard,
   HandCoins,
-  Flame
+  Flame,
+  MessageSquare
 } from 'lucide-react';
 import { formatCurrency } from './utils/formatters';
 
@@ -1226,6 +1228,37 @@ export default function App() {
               </button>
             </div>
 
+            {/* WA Sender+ Checklist & Dual WhatsApp Quick Hub */}
+            <div className="mb-6 p-3.5 bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-emerald-500/10 border border-purple-200/80 dark:border-purple-800/60 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                  <MessageSquare className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                      {language === 'bn' ? 'WA Sender+ (হোয়াটসঅ্যাপ চেকলিস্ট ও বিজনেস ক্লোন)' : 'WA Sender+ (WhatsApp Checklist & Clone)'}
+                    </span>
+                    <span className="text-[10px] bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-300 font-bold px-1.5 py-0.5 rounded-full shrink-0">
+                      Plus
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 truncate mt-0.5">
+                    {language === 'bn'
+                      ? 'কাস্টম ক্যাটাগরি চেকলিস্ট, মেসেজ হিস্ট্রি, ডুয়াল/ক্লোন হোয়াটসঅ্যাপ সাপোর্ট, বয়স ও লিফটিং ক্যালকুলেটর'
+                      : 'Custom presets, message history, dual/cloned WhatsApp intent, age & lifting calculators'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActivePage('whatsapp')}
+                className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 active:scale-95 text-white text-xs font-bold rounded-xl transition-all shadow-xs shrink-0 cursor-pointer"
+              >
+                {language === 'bn' ? 'টুলকিট খুলুন →' : 'Open Toolkit →'}
+              </button>
+            </div>
+
             {/* 4. সর্বশেষ লেনদেন (Recent Transactions with "সব দেখুন ও এডিট") */}
             <RecentTransactions
               transactions={recentTransactionsList}
@@ -1349,6 +1382,16 @@ export default function App() {
             onToggleReminder={handleToggleCalorieReminder}
             onUpdateWaterGlasses={handleUpdateWaterGlasses}
             language={language}
+          />
+        )}
+
+        {/* 7. WHATSAPP SENDER PLUS & B2B VOUCHER PAGE */}
+        {activePage === 'whatsapp' && (
+          <WhatsAppSenderPage
+            transactions={transactions}
+            language={language}
+            userProfile={userProfile}
+            onNavigateHome={() => setActivePage('home')}
           />
         )}
       </main>

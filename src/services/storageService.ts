@@ -9,7 +9,9 @@ import type {
   CalorieMealLog,
   CalorieActivityLog,
   CalorieUserProfile,
-  CalorieReminder
+  CalorieReminder,
+  WhatsAppChecklistItem,
+  B2BAuthorizationData
 } from '../types';
 import { DEFAULT_CALORIE_REMINDERS } from '../data/bangladeshiFoods';
 
@@ -775,5 +777,35 @@ export const storageService = {
     } catch (e) {
       console.error('Failed to save water intake', e);
     }
+  },
+
+  // WhatsApp Saved Checklists
+  getWhatsAppChecklists(): { id: string; title: string; items: WhatsAppChecklistItem[]; date: string }[] {
+    try {
+      const data = localStorage.getItem('khatapotro_whatsapp_checklists_v1');
+      if (data) return JSON.parse(data);
+    } catch (e) {
+      console.error('Failed to load whatsapp checklists', e);
+    }
+    return [];
+  },
+
+  saveWhatsAppChecklists(lists: { id: string; title: string; items: WhatsAppChecklistItem[]; date: string }[]) {
+    localStorage.setItem('khatapotro_whatsapp_checklists_v1', JSON.stringify(lists));
+  },
+
+  // B2B Vouchers
+  getB2BVouchers(): B2BAuthorizationData[] {
+    try {
+      const data = localStorage.getItem('khatapotro_b2b_vouchers_v1');
+      if (data) return JSON.parse(data);
+    } catch (e) {
+      console.error('Failed to load B2B vouchers', e);
+    }
+    return [];
+  },
+
+  saveB2BVouchers(vouchers: B2BAuthorizationData[]) {
+    localStorage.setItem('khatapotro_b2b_vouchers_v1', JSON.stringify(vouchers));
   },
 };
