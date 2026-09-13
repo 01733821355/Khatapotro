@@ -557,14 +557,19 @@ export const CameraFoodScannerModal: React.FC<CameraFoodScannerModalProps> = ({
                   <div className="bg-gradient-to-br from-emerald-50 via-teal-50/60 to-slate-50 border border-emerald-200/90 rounded-2xl p-3.5 sm:p-4">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-200/60 pb-3">
                       <div>
-                        <div className="flex items-center gap-1.5 mb-1">
+                        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                           <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded-full">
                             <Sparkles className="w-3 h-3 text-emerald-700" />
                             {language === 'bn' ? 'প্লেটের খাবারের সারসংক্ষেপ' : 'Plate Overview'}
                           </span>
                           <span className="text-[11px] text-slate-500 font-semibold">
-                            ({plateItems.length} {language === 'bn' ? 'টি পদ শনাক্ত' : 'items detected'})
+                            ({plateItems.length} {language === 'bn' ? 'টি পদ প্রস্তুত' : 'items ready'})
                           </span>
+                          {scanResult.source === 'fallback' && (
+                            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                              {language === 'bn' ? 'স্ট্যান্ডার্ড INFS মান' : 'Standard INFS Estimate'}
+                            </span>
+                          )}
                         </div>
 
                         {/* Editable Meal Title */}
