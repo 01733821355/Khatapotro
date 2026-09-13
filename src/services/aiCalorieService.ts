@@ -63,7 +63,21 @@ const FALLBACK_KNOWLEDGE: { pattern: RegExp; name: string; cal: number; p: numbe
   { pattern: /আলু ভর্তা|alu bhorta|bhorta/i, name: 'আলু ভর্তা সরিষার তেলে', cal: 130, p: 2.5, c: 22, f: 4, unit: '২ চামচ (৬০ গ্রাম)', advice: 'ঐতিহ্যবাহী স্বাদের কার্বোহাইড্রেট পদ।' },
   { pattern: /পায়েস|payesh|kheer/i, name: 'দুধের পায়েস / ক্ষীর', cal: 260, p: 6, c: 42, f: 8, unit: '১ ছোট বাটি (১৫০ গ্রাম)', advice: 'দুধ ও চালের মিষ্টি পদ।' },
   { pattern: /মিষ্টি|rosogolla|sandesh|sweet/i, name: 'রসগোল্লা বা মিষ্টি', cal: 175, p: 3, c: 32, f: 4, unit: '১টি মিষ্টি', advice: 'চিনি ও ক্যালরি বেশি।' },
+  { pattern: /পোলাও|polao|pulao/i, name: 'মটর বা সুগন্ধি পোলাও', cal: 260, p: 4.5, c: 46, f: 6.5, unit: '১ মাঝারি প্লেট (১৫০ গ্রাম)', advice: 'ঘি ও সুগন্ধি চালের পদ।' },
+  { pattern: /সবজি|শাক|ভাজি|vegetable|shobji|saag|শাকসবজি/i, name: 'মিশ্র সবজি বা শাক ভাজি', cal: 55, p: 2.2, c: 7, f: 2.5, unit: '১ বাটি (১০০ গ্রাম)', advice: 'প্রচুর ফাইবার ও ভিটামিনের চমৎকার উৎস।' },
+  { pattern: /সালাদ|শসা|টমেটো|salad|cucumber/i, name: 'তাজা শসা ও সালাদ', cal: 18, p: 0.8, c: 3.5, f: 0.2, unit: '১ বাটি (১০০ গ্রাম)', advice: 'জিরো ফ্যাট ও হাই হাইড্রেশন ডায়েট ফুড।' },
+  { pattern: /চিংড়ি|shrimp|prawn/i, name: 'চিংড়ি মাছের মালাইকারি বা ভুনা', cal: 180, p: 19, c: 4, f: 9, unit: '১ বাটি (৪-৫টি মাঝারি)', advice: 'উচ্চ প্রোটিন ও জিংক সমৃদ্ধ।' },
+  { pattern: /মাছ|fish/i, name: 'মাছের ঝোল / ভাজা', cal: 175, p: 21, c: 2, f: 8.5, unit: '১ টুকরা (৮৫ গ্রাম)', advice: 'সহজপাচ্য স্বাস্থ্যকর প্রোটিন।' },
+  { pattern: /মাংস|meat/i, name: 'মাংসের তরকারি', cal: 270, p: 24, c: 3.5, f: 18, unit: '১ বাটি (১৫০ গ্রাম)', advice: 'প্রোটিন সমৃদ্ধ।' },
+  { pattern: /দুধ|milk/i, name: 'খাঁটি গাভীর দুধ', cal: 130, p: 6.5, c: 10, f: 7, unit: '১ গ্লাস (২০০ মিলি)', advice: 'ক্যালসিয়াম ও ভিটামিন ডি-এর দারুণ উৎস।' },
+  { pattern: /দই|yogurt|doi/i, name: 'মিষ্টি বা টক দই', cal: 110, p: 5.5, c: 12, f: 4.5, unit: '১ বাটি (১০০ গ্রাম)', advice: 'প্রোবায়োটিক হজমে উপকারী।' },
+  { pattern: /মুড়ি|chira|চিঁড়া|muri/i, name: 'শুকনো মুড়ি বা চিঁড়া', cal: 110, p: 2.5, c: 24, f: 0.2, unit: '১ বাটি (৩০ গ্রাম)', advice: 'হালকা ও সহজে হজমযোগ্য নাস্তা।' },
+  { pattern: /ফল|fruit/i, name: 'মৌসুমি তাজা ফল', cal: 75, p: 0.8, c: 18, f: 0.2, unit: '১টি বা ১ বাটি (১০০ গ্রাম)', advice: 'প্রাকৃতিক ভিটামিন ও অ্যান্টিঅক্সিডেন্ট।' },
 ];
+
+export function lookupNutritionInstant(foodName: string, portionMultiplier: number = 1): AiCalorieEstimate {
+  return fallbackEstimate(foodName, portionMultiplier);
+}
 
 function fallbackEstimate(foodName: string, portionMultiplier: number = 1): AiCalorieEstimate {
   const normalized = foodName.trim();

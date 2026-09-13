@@ -107,6 +107,7 @@ export default function App() {
 
   // Modals
   const [isAddTxOpen, setIsAddTxOpen] = useState(false);
+  const [isAddTxVoiceMode, setIsAddTxVoiceMode] = useState(false);
   const [addTxDefaultType, setAddTxDefaultType] = useState<TransactionType>('expense');
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [ledgerInitialFilter, setLedgerInitialFilter] = useState<'all' | 'income' | 'expense' | 'debt' | 'lending'>('all');
@@ -1130,11 +1131,19 @@ export default function App() {
               onAddIncome={() => {
                 setEditingTransaction(null);
                 setAddTxDefaultType('income');
+                setIsAddTxVoiceMode(false);
                 setIsAddTxOpen(true);
               }}
               onAddExpense={() => {
                 setEditingTransaction(null);
                 setAddTxDefaultType('expense');
+                setIsAddTxVoiceMode(false);
+                setIsAddTxOpen(true);
+              }}
+              onAddVoiceExpense={() => {
+                setEditingTransaction(null);
+                setAddTxDefaultType('expense');
+                setIsAddTxVoiceMode(true);
                 setIsAddTxOpen(true);
               }}
               onOpenReports={() => setActivePage('report')}
@@ -1427,6 +1436,7 @@ export default function App() {
         isOpen={isAddTxOpen}
         onClose={() => {
           setIsAddTxOpen(false);
+          setIsAddTxVoiceMode(false);
           setEditingTransaction(null);
         }}
         defaultType={addTxDefaultType}
@@ -1437,6 +1447,7 @@ export default function App() {
         language={language}
         dailyExpenseLimit={dailyExpenseLimit}
         todayExpense={todayExpense}
+        initialVoiceMode={isAddTxVoiceMode}
       />
 
       {/* Daily Expense Limit Settings Modal */}

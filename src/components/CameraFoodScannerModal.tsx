@@ -18,9 +18,16 @@ import {
   ListPlus,
   SlidersHorizontal,
   Layers,
-  Save
+  Save,
+  RefreshCw
 } from 'lucide-react';
-import { scanFoodImage, type ScannedMealResult, type ScannedFoodItem } from '../services/aiCalorieService';
+import { 
+  scanFoodImage, 
+  estimateFoodCalories, 
+  lookupNutritionInstant, 
+  type ScannedMealResult, 
+  type ScannedFoodItem 
+} from '../services/aiCalorieService';
 import type { Language, MealType, CalorieMealLog } from '../types';
 
 interface CameraFoodScannerModalProps {
@@ -46,6 +53,7 @@ interface EditablePlateItem {
   baseFat: number;
   fat: number;
   isEditingDetails: boolean;
+  isRecalculating?: boolean;
 }
 
 export const CameraFoodScannerModal: React.FC<CameraFoodScannerModalProps> = ({
@@ -82,6 +90,7 @@ export const CameraFoodScannerModal: React.FC<CameraFoodScannerModalProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const debounceTimers = useRef<{ [itemId: string]: ReturnType<typeof setTimeout> }>({});
 
   // Reset state when modal closes
   useEffect(() => {
@@ -93,6 +102,11 @@ export const CameraFoodScannerModal: React.FC<CameraFoodScannerModalProps> = ({
       setPlateItems([]);
       setShowAddNewItemForm(false);
       setSaveSuccessToast(false);
+      // Clear all active debounce timers
+      Object.values(debounceTimers.current).forEach((t) => {
+        if (t) clearTimeout(t as any);
+      });
+      debounceTimers.current = {};
     }
   }, [isOpen]);
 
@@ -236,21 +250,151 @@ export const CameraFoodScannerModal: React.FC<CameraFoodScannerModalProps> = ({
     );
   };
 
-  // 2. Update Item Name
+  // 2. Recalculate Item Nutrition based on Name (Fast Local INFS match + AI Calibration)
+  const handleRecalculateItemNutrition = async (itemId: string, targetName?: string) => {
+    const item = plateItems.find((p) => p.id === itemId);
+    if (!item) return;
+
+    const foodNameToEstimate = (targetName !== undefined ? targetName : item.name).trim();
+    if (!foodNameToEstimate) return;
+
+    const safeQty = item.quantity > 0 ? item.quantity : 1;
+
+    // Step A: Instant Local INFS Knowledge Match (0ms latency, guaranteed instant update)
+    const instant = lookupNutritionInstant(foodNameToEstimate, safeQty);
+    const instantBaseCal = Math.max(10, Math.round(instant.calories / safeQty));
+    const instantBaseProt = Math.max(0, Math.round((instant.protein / safeQty) * 10) / 10);
+    const instantBaseCarbs = Math.max(0, Math.round((instant.carbs / safeQty) * 10) / 10);
+    const instantBaseFat = Math.max(0, Math.round((instant.fat / safeQty) * 10) / 10);
+
+    setPlateItems((prev) =>
+      prev.map((it) => {
+        if (it.id !== itemId) return it;
+        return {
+          ...it,
+          name: targetName !== undefined ? targetName : it.name,
+          portion: instant.servingUnit || it.portion,
+          baseCalories: instantBaseCal,
+          calories: instant.calories,
+          baseProtein: instantBaseProt,
+          protein: instant.protein,
+          baseCarbs: instantBaseCarbs,
+          carbs: instant.carbs,
+          baseFat: instantBaseFat,
+          fat: instant.fat,
+          isRecalculating: true,
+        };
+      })
+    );
+
+    // Step B: AI Refinement (asynchronously checks exact database or AI estimate)
+    try {
+      const aiEstimate = await estimateFoodCalories(foodNameToEstimate, safeQty, language);
+      const aiBaseCal = Math.max(10, Math.round(aiEstimate.calories / safeQty));
+      const aiBaseProt = Math.max(0, Math.round((aiEstimate.protein / safeQty) * 10) / 10);
+      const aiBaseCarbs = Math.max(0, Math.round((aiEstimate.carbs / safeQty) * 10) / 10);
+      const aiBaseFat = Math.max(0, Math.round((aiEstimate.fat / safeQty) * 10) / 10);
+
+      setPlateItems((prev) =>
+        prev.map((it) => {
+          if (it.id !== itemId) return it;
+          return {
+            ...it,
+            portion: aiEstimate.servingUnit || it.portion,
+            baseCalories: aiBaseCal,
+            calories: aiEstimate.calories,
+            baseProtein: aiBaseProt,
+            protein: aiEstimate.protein,
+            baseCarbs: aiBaseCarbs,
+            carbs: aiEstimate.carbs,
+            baseFat: aiBaseFat,
+            fat: aiEstimate.fat,
+            isRecalculating: false,
+          };
+        })
+      );
+    } catch {
+      setPlateItems((prev) =>
+        prev.map((it) => (it.id === itemId ? { ...it, isRecalculating: false } : it))
+      );
+    }
+  };
+
+  // 3. Update Item Name with real-time recalculation
   const handleUpdateItemName = (itemId: string, newName: string) => {
     setPlateItems((prev) =>
       prev.map((item) => (item.id === itemId ? { ...item, name: newName } : item))
     );
+
+    if (debounceTimers.current[itemId]) {
+      clearTimeout(debounceTimers.current[itemId]);
+    }
+
+    const trimmed = newName.trim();
+    if (trimmed.length >= 2) {
+      // Immediate local fast lookup
+      const targetItem = plateItems.find((p) => p.id === itemId);
+      const safeQty = targetItem && targetItem.quantity > 0 ? targetItem.quantity : 1;
+      const instant = lookupNutritionInstant(trimmed, safeQty);
+
+      if (instant.source !== 'fallback' || instant.calories !== Math.round(200 * safeQty)) {
+        const instantBaseCal = Math.max(10, Math.round(instant.calories / safeQty));
+        const instantBaseProt = Math.max(0, Math.round((instant.protein / safeQty) * 10) / 10);
+        const instantBaseCarbs = Math.max(0, Math.round((instant.carbs / safeQty) * 10) / 10);
+        const instantBaseFat = Math.max(0, Math.round((instant.fat / safeQty) * 10) / 10);
+
+        setPlateItems((prev) =>
+          prev.map((it) =>
+            it.id === itemId
+              ? {
+                  ...it,
+                  portion: instant.servingUnit || it.portion,
+                  baseCalories: instantBaseCal,
+                  calories: instant.calories,
+                  baseProtein: instantBaseProt,
+                  protein: instant.protein,
+                  baseCarbs: instantBaseCarbs,
+                  carbs: instant.carbs,
+                  baseFat: instantBaseFat,
+                  fat: instant.fat,
+                }
+              : it
+          )
+        );
+      }
+
+      // Debounce AI calibration
+      debounceTimers.current[itemId] = setTimeout(() => {
+        handleRecalculateItemNutrition(itemId, trimmed);
+      }, 700);
+    }
   };
 
-  // 3. Update Item Portion Description
+  const handleBlurItemName = (itemId: string, finalName: string) => {
+    if (debounceTimers.current[itemId]) {
+      clearTimeout(debounceTimers.current[itemId]);
+    }
+    const trimmed = finalName.trim();
+    if (trimmed.length >= 2) {
+      handleRecalculateItemNutrition(itemId, trimmed);
+    }
+  };
+
+  const handleQuickSelectFood = (itemId: string, foodName: string) => {
+    if (debounceTimers.current[itemId]) {
+      clearTimeout(debounceTimers.current[itemId]);
+    }
+    handleRecalculateItemNutrition(itemId, foodName);
+  };
+
+  // 4. Update Item Portion Description
   const handleUpdateItemPortion = (itemId: string, newPortion: string) => {
     setPlateItems((prev) =>
       prev.map((item) => (item.id === itemId ? { ...item, portion: newPortion } : item))
     );
   };
 
-  // 4. Update Base Calories manually
+  // 5. Update Base Calories manually
   const handleUpdateItemBaseCalories = (itemId: string, newBaseCal: number) => {
     const safeBase = Math.max(0, newBaseCal);
     setPlateItems((prev) =>
@@ -265,7 +409,23 @@ export const CameraFoodScannerModal: React.FC<CameraFoodScannerModalProps> = ({
     );
   };
 
-  // 5. Toggle Item Details Edit Mode
+  // 6. Direct edit calories on card
+  const handleDirectUpdateItemCalories = (itemId: string, newCalories: number) => {
+    const safeCal = Math.max(0, Math.round(newCalories));
+    setPlateItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        const safeQty = item.quantity > 0 ? item.quantity : 1;
+        return {
+          ...item,
+          calories: safeCal,
+          baseCalories: Math.round(safeCal / safeQty),
+        };
+      })
+    );
+  };
+
+  // 7. Toggle Item Details Edit Mode
   const handleToggleEditDetails = (itemId: string) => {
     setPlateItems((prev) =>
       prev.map((item) =>
@@ -274,12 +434,27 @@ export const CameraFoodScannerModal: React.FC<CameraFoodScannerModalProps> = ({
     );
   };
 
-  // 6. Delete Item from Plate
+  // 8. Delete Item from Plate
   const handleDeleteItem = (itemId: string) => {
     setPlateItems((prev) => prev.filter((item) => item.id !== itemId));
   };
 
-  // 7. Add New Item to Plate
+  // 9. Handle New Item Name change with auto-fill
+  const handleNewItemNameChange = (name: string) => {
+    setNewItemName(name);
+    if (name.trim().length >= 2) {
+      const instant = lookupNutritionInstant(name.trim(), 1);
+      setNewItemCalories(String(instant.calories));
+      setNewItemProtein(String(instant.protein));
+      setNewItemCarbs(String(instant.carbs));
+      setNewItemFat(String(instant.fat));
+      if (instant.servingUnit) {
+        setNewItemPortion(instant.servingUnit);
+      }
+    }
+  };
+
+  // 10. Add New Item to Plate
   const handleAddNewItem = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newItemName.trim()) return;
@@ -698,9 +873,9 @@ export const CameraFoodScannerModal: React.FC<CameraFoodScannerModalProps> = ({
                             <input
                               type="text"
                               required
-                              placeholder={language === 'bn' ? 'যেমন: ১ গ্লাস দুধ, সালাদ' : 'e.g. 1 glass milk'}
+                              placeholder={language === 'bn' ? 'যেমন: গরুর মাংস, ১ গ্লাস দুধ, সালাদ' : 'e.g. beef curry, 1 glass milk'}
                               value={newItemName}
-                              onChange={(e) => setNewItemName(e.target.value)}
+                              onChange={(e) => handleNewItemNameChange(e.target.value)}
                               className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                             />
                           </div>
@@ -762,27 +937,84 @@ export const CameraFoodScannerModal: React.FC<CameraFoodScannerModalProps> = ({
                                   {index + 1}
                                 </span>
 
-                                {/* Editable Food Name */}
-                                <input
-                                  type="text"
-                                  value={item.name}
-                                  onChange={(e) => handleUpdateItemName(item.id, e.target.value)}
-                                  className="font-bold text-slate-900 text-xs sm:text-sm bg-transparent hover:bg-white focus:bg-white px-1.5 py-0.5 rounded-lg border border-transparent hover:border-slate-300 focus:border-emerald-500 focus:outline-hidden transition-all max-w-[220px] sm:max-w-xs"
-                                  title="Click to edit name"
-                                />
+                                {/* Editable Food Name with Auto-Recalculate */}
+                                <div className="flex items-center gap-1 relative flex-1 min-w-[150px] max-w-xs">
+                                  <input
+                                    type="text"
+                                    value={item.name}
+                                    onChange={(e) => handleUpdateItemName(item.id, e.target.value)}
+                                    onBlur={(e) => handleBlurItemName(item.id, e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.currentTarget.blur();
+                                      }
+                                    }}
+                                    placeholder={language === 'bn' ? 'খাবারের নাম লিখুন' : 'Food name'}
+                                    className="w-full font-bold text-slate-900 text-xs sm:text-sm bg-white hover:bg-slate-50 focus:bg-white px-2 py-1 rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-hidden transition-all shadow-xs"
+                                    title={language === 'bn' ? 'খাবারের নাম লিখলে বা পরিবর্তন করলে ক্যালরি স্বয়ংক্রিয়ভাবে হিসাব হবে' : 'Editing food name updates calories automatically'}
+                                  />
+
+                                  {/* Recalculate Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRecalculateItemNutrition(item.id)}
+                                    disabled={item.isRecalculating}
+                                    className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 transition-colors shrink-0 cursor-pointer disabled:opacity-50"
+                                    title={language === 'bn' ? 'ক্যালরি ও পুষ্টি পুনঃগণনা করুন' : 'Recalculate calories'}
+                                  >
+                                    <RefreshCw className={`w-3.5 h-3.5 ${item.isRecalculating ? 'animate-spin text-emerald-600' : ''}`} />
+                                  </button>
+                                </div>
 
                                 <span className="text-[11px] text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200/80 shrink-0">
                                   {item.portion}
                                 </span>
                               </div>
+
+                              {/* Quick Food Suggestions for instant swap & calorie recalculation */}
+                              <div className="flex items-center gap-1 mt-1.5 overflow-x-auto pb-0.5 no-scrollbar">
+                                <span className="text-[10px] text-slate-400 shrink-0 font-medium">
+                                  {language === 'bn' ? 'দ্রুত নির্বাচন:' : 'Quick swap:'}
+                                </span>
+                                {[
+                                  { label: 'সাদা ভাত', en: 'Rice' },
+                                  { label: 'রুটি', en: 'Roti' },
+                                  { label: 'পাতলা ডাল', en: 'Dal' },
+                                  { label: 'মুরগির মাংস', en: 'Chicken' },
+                                  { label: 'গরুর মাংস', en: 'Beef' },
+                                  { label: 'মাছের ঝোল', en: 'Fish' },
+                                  { label: 'ডিম ভাজি', en: 'Fried Egg' },
+                                  { label: 'সবজি ভাজি', en: 'Veg' },
+                                  { label: 'সালাদ', en: 'Salad' },
+                                ].map((s) => (
+                                  <button
+                                    key={s.label}
+                                    type="button"
+                                    onClick={() => handleQuickSelectFood(item.id, language === 'bn' ? s.label : s.en)}
+                                    className="text-[10px] font-semibold text-slate-600 hover:text-emerald-700 bg-white hover:bg-emerald-50 px-1.5 py-0.5 rounded-md border border-slate-200 hover:border-emerald-300 shrink-0 transition-all cursor-pointer"
+                                  >
+                                    {language === 'bn' ? s.label : s.en}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
 
-                            {/* Item Calories & Delete */}
+                            {/* Item Calories & Actions */}
                             <div className="flex items-center gap-1.5 shrink-0">
                               <div className="text-right">
-                                <div className="text-xs sm:text-sm font-black text-rose-600 flex items-center justify-end gap-1">
-                                  <Flame className="w-3.5 h-3.5 fill-rose-500" />
-                                  <span>{item.calories} kcal</span>
+                                <div className="flex items-center justify-end gap-1">
+                                  <Flame className="w-3.5 h-3.5 fill-rose-500 text-rose-500 shrink-0" />
+                                  <div className="flex items-center gap-0.5">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={item.calories}
+                                      onChange={(e) => handleDirectUpdateItemCalories(item.id, Number(e.target.value) || 0)}
+                                      className="w-14 sm:w-16 text-right text-xs sm:text-sm font-black text-rose-600 bg-white hover:bg-rose-50/50 focus:bg-white border border-rose-200 focus:border-rose-400 rounded-md px-1 py-0.5 focus:outline-hidden shadow-2xs"
+                                      title={language === 'bn' ? 'ক্যালরি সরাসরি লিখে পরিবর্তন করতে পারেন' : 'Click to directly edit calories'}
+                                    />
+                                    <span className="text-xs sm:text-sm font-black text-rose-600">kcal</span>
+                                  </div>
                                 </div>
                                 <span className="text-[10px] text-slate-400 block -mt-0.5">
                                   P: {item.protein}g • C: {item.carbs}g • F: {item.fat}g

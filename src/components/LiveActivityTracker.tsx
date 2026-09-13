@@ -42,14 +42,17 @@ export const LiveActivityTracker: React.FC<LiveActivityTrackerProps> = ({
   const [liveSteps, setLiveSteps] = useState(0);
   const [activeSeconds, setActiveSeconds] = useState(0);
   const [sensorActivityType, setSensorActivityType] = useState<'walking' | 'running'>('walking');
+  const [sensorSensitivity, setSensorSensitivity] = useState<'high' | 'normal' | 'low'>('high');
   const [sensorSupported, setSensorSupported] = useState<boolean | null>(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [isPulsingStep, setIsPulsingStep] = useState(false);
 
   // References for motion detection
-  const lastAccRef = useRef<{ x: number; y: number; z: number }>({ x: 0, y: 0, z: 0 });
+  const gravityEmaRef = useRef<number>(9.8);
+  const isAbovePeakRef = useRef<boolean>(false);
   const lastStepTimeRef = useRef<number>(0);
   const timerRef = useRef<any>(null);
+  const motionHandlerRef = useRef<((event: DeviceMotionEvent) => void) | null>(null);
 
   // --- 2. Health App Quick Importer State ---
   const [healthSteps, setHealthSteps] = useState<string>('5000');
@@ -91,42 +94,84 @@ export const LiveActivityTracker: React.FC<LiveActivityTrackerProps> = ({
     };
   }, [isSensorRunning]);
 
-  // Handle Motion Sensor Event
+  // Threshold calculation based on sensitivity and activity mode
+  const getStepThreshold = () => {
+    let base = sensorActivityType === 'running' ? 1.6 : 0.95;
+    if (sensorSensitivity === 'high') base *= 0.75; // e.g. 0.71 for walking
+    if (sensorSensitivity === 'low') base *= 1.4;   // e.g. 1.33 for walking
+    return base;
+  };
+
+  // Manual test step increment
+  const handleSimulateStep = () => {
+    setLiveSteps((prev) => prev + 1);
+    setIsPulsingStep(true);
+    setTimeout(() => setIsPulsingStep(false), 200);
+  };
+
+  // Handle Motion Sensor Event with peak detection over dynamic acceleration
   const handleDeviceMotion = (event: DeviceMotionEvent) => {
-    const acc = event.accelerationIncludingGravity || event.acceleration;
-    if (!acc || acc.x === null || acc.y === null || acc.z === null) return;
+    // Prefer acceleration (gravity-isolated) if valid, otherwise use accelerationIncludingGravity with EMA filter
+    const directAcc = event.acceleration;
+    const gravAcc = event.accelerationIncludingGravity;
 
-    const x = acc.x;
-    const y = acc.y;
-    const z = acc.z;
+    let dynamicDelta = 0;
 
-    const magnitude = Math.sqrt(x * x + y * y + z * z);
-    const lastMag = Math.sqrt(
-      lastAccRef.current.x * lastAccRef.current.x +
-      lastAccRef.current.y * lastAccRef.current.y +
-      lastAccRef.current.z * lastAccRef.current.z
-    );
+    if (
+      directAcc &&
+      directAcc.x !== null &&
+      directAcc.y !== null &&
+      directAcc.z !== null &&
+      (Math.abs(directAcc.x) > 0.01 || Math.abs(directAcc.y) > 0.01 || Math.abs(directAcc.z) > 0.01)
+    ) {
+      // Direct linear acceleration without gravity
+      dynamicDelta = Math.sqrt(
+        directAcc.x * directAcc.x + directAcc.y * directAcc.y + directAcc.z * directAcc.z
+      );
+    } else if (gravAcc && gravAcc.x !== null && gravAcc.y !== null && gravAcc.z !== null) {
+      // Total acceleration including 9.8m/s² gravity
+      const totalMag = Math.sqrt(
+        gravAcc.x * gravAcc.x + gravAcc.y * gravAcc.y + gravAcc.z * gravAcc.z
+      );
 
-    const delta = Math.abs(magnitude - lastMag);
-    const now = Date.now();
-
-    // Step detection threshold with 350ms debounce
-    const threshold = sensorActivityType === 'running' ? 4.5 : 2.8;
-    if (delta > threshold && now - lastStepTimeRef.current > 350) {
-      lastStepTimeRef.current = now;
-      setLiveSteps((prev) => prev + 1);
-      setIsPulsingStep(true);
-      setTimeout(() => setIsPulsingStep(false), 200);
+      // Smooth gravity baseline with Exponential Moving Average (EMA)
+      gravityEmaRef.current = gravityEmaRef.current * 0.92 + totalMag * 0.08;
+      dynamicDelta = Math.abs(totalMag - gravityEmaRef.current);
+    } else {
+      return;
     }
 
-    lastAccRef.current = { x, y, z };
+    const threshold = getStepThreshold();
+    const now = Date.now();
+    const minStepIntervalMs = sensorActivityType === 'running' ? 240 : 280;
+
+    // Peak detection state machine: must cross above threshold and reset
+    if (dynamicDelta > threshold) {
+      if (!isAbovePeakRef.current && now - lastStepTimeRef.current > minStepIntervalMs) {
+        lastStepTimeRef.current = now;
+        isAbovePeakRef.current = true;
+        setLiveSteps((prev) => prev + 1);
+        setIsPulsingStep(true);
+        setTimeout(() => setIsPulsingStep(false), 200);
+      }
+    } else if (dynamicDelta < threshold * 0.6) {
+      // Reset peak when wave falls back down
+      isAbovePeakRef.current = false;
+    }
   };
+
+  // Keep motion handler reference updated
+  useEffect(() => {
+    motionHandlerRef.current = handleDeviceMotion;
+  });
 
   // Start or Stop Sensor with permission handling for iOS 13+ & modern Android
   const toggleSensor = async () => {
     if (isSensorRunning) {
       setIsSensorRunning(false);
-      window.removeEventListener('devicemotion', handleDeviceMotion);
+      if (motionHandlerRef.current) {
+        window.removeEventListener('devicemotion', motionHandlerRef.current);
+      }
       return;
     }
 
@@ -150,7 +195,15 @@ export const LiveActivityTracker: React.FC<LiveActivityTrackerProps> = ({
 
       setSensorSupported(true);
       setIsSensorRunning(true);
-      window.addEventListener('devicemotion', handleDeviceMotion);
+      gravityEmaRef.current = 9.8;
+      isAbovePeakRef.current = false;
+
+      const listener = (e: DeviceMotionEvent) => {
+        if (motionHandlerRef.current) {
+          motionHandlerRef.current(e);
+        }
+      };
+      window.addEventListener('devicemotion', listener);
     } else {
       setSensorSupported(false);
     }
@@ -158,9 +211,12 @@ export const LiveActivityTracker: React.FC<LiveActivityTrackerProps> = ({
 
   const handleResetSensor = () => {
     setIsSensorRunning(false);
-    window.removeEventListener('devicemotion', handleDeviceMotion);
+    if (motionHandlerRef.current) {
+      window.removeEventListener('devicemotion', motionHandlerRef.current);
+    }
     setLiveSteps(0);
     setActiveSeconds(0);
+    isAbovePeakRef.current = false;
   };
 
   // Save Sensor result to today's activity log
@@ -370,36 +426,76 @@ export const LiveActivityTracker: React.FC<LiveActivityTrackerProps> = ({
             </div>
           </div>
 
-          {/* Activity Type Switcher */}
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-              <span>{language === 'bn' ? 'অ্যাক্টিভিটি মোড:' : 'Mode:'}</span>
-              <button
-                type="button"
-                onClick={() => setSensorActivityType('walking')}
-                className={`px-3 py-1 rounded-xl border transition-all cursor-pointer ${
-                  sensorActivityType === 'walking'
-                    ? 'bg-emerald-600 text-white border-emerald-600 font-bold shadow-2xs'
-                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                }`}
-              >
-                {language === 'bn' ? 'হাঁটা (Walking)' : 'Walking'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setSensorActivityType('running')}
-                className={`px-3 py-1 rounded-xl border transition-all cursor-pointer ${
-                  sensorActivityType === 'running'
-                    ? 'bg-rose-600 text-white border-rose-600 font-bold shadow-2xs'
-                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                }`}
-              >
-                {language === 'bn' ? 'দৌড়ানো (Running)' : 'Running'}
-              </button>
+          {/* Activity Type & Sensitivity Switcher */}
+          <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Activity Mode */}
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+                <span>{language === 'bn' ? 'মোড:' : 'Mode:'}</span>
+                <button
+                  type="button"
+                  onClick={() => setSensorActivityType('walking')}
+                  className={`px-2.5 py-1 rounded-xl border text-xs transition-all cursor-pointer ${
+                    sensorActivityType === 'walking'
+                      ? 'bg-emerald-600 text-white border-emerald-600 font-bold shadow-2xs'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  {language === 'bn' ? 'হাঁটা (Walking)' : 'Walking'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSensorActivityType('running')}
+                  className={`px-2.5 py-1 rounded-xl border text-xs transition-all cursor-pointer ${
+                    sensorActivityType === 'running'
+                      ? 'bg-rose-600 text-white border-rose-600 font-bold shadow-2xs'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  {language === 'bn' ? 'দৌড়ানো (Running)' : 'Running'}
+                </button>
+              </div>
+
+              {/* Sensitivity Mode */}
+              <div className="flex items-center gap-1 text-xs font-semibold text-slate-600">
+                <span className="text-[11px] text-slate-400">{language === 'bn' ? 'সেন্সর সংবেদনশীলতা:' : 'Sensitivity:'}</span>
+                <button
+                  type="button"
+                  onClick={() => setSensorSensitivity('high')}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
+                    sensorSensitivity === 'high'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                  title={language === 'bn' ? 'হালকা নাড়াচাড়াতেও স্টেপ কাউন্ট হবে (পকেট বা হাতে)' : 'High sensitivity for gentle movement'}
+                >
+                  {language === 'bn' ? 'উচ্চ (High)' : 'High'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSensorSensitivity('normal')}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
+                    sensorSensitivity === 'normal'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  {language === 'bn' ? 'স্বাভাবিক' : 'Normal'}
+                </button>
+              </div>
             </div>
 
-            {/* Sensor Control Buttons */}
+            {/* Sensor Control Buttons & Manual Step Simulator */}
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSimulateStep}
+                className="px-2.5 py-1.5 rounded-xl border border-rose-200 bg-rose-50/70 hover:bg-rose-100 text-rose-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shadow-2xs active:scale-95"
+                title={language === 'bn' ? 'কম্পিউটার বা টেস্টের জন্য এক ক্লিক পদক্ষেপ যোগ' : 'Tap to test 1 step manually'}
+              >
+                <Footprints className="w-3.5 h-3.5" />
+                <span>{language === 'bn' ? '+১ পা টেস্ট' : '+1 Step Test'}</span>
+              </button>
               <button
                 type="button"
                 onClick={handleResetSensor}

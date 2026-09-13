@@ -11,7 +11,10 @@ import {
   FileText, 
   Check, 
   Pencil,
-  Trash2
+  Trash2,
+  Mic,
+  MicOff,
+  Sparkles
 } from 'lucide-react';
 import type { 
   Transaction, 
@@ -24,6 +27,9 @@ import type {
   DocumentCategory 
 } from '../types';
 import { formatCurrency } from '../utils/formatters';
+import { VoiceTransactionAssistant } from './VoiceTransactionAssistant';
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
+import { normalizeBengaliNumbers, type ParsedVoiceTransaction } from '../utils/voiceTransactionParser';
 
 interface AddTransactionModalProps {
   isOpen: boolean;
@@ -42,6 +48,7 @@ interface AddTransactionModalProps {
   language: Language;
   dailyExpenseLimit?: DailyExpenseLimit;
   todayExpense?: number;
+  initialVoiceMode?: boolean;
 }
 
 const EXPENSE_CATEGORIES = ['খাবার', 'বিল', 'যাতায়াত', 'বাজার', 'অন্যান্য খরচ', 'ধার প্রদান', 'ঋণ পরিশোধ', 'দোকান ভাড়া', 'বেতন'];
@@ -59,6 +66,7 @@ export const AddTransactionModal = ({
   language,
   dailyExpenseLimit,
   todayExpense = 0,
+  initialVoiceMode = false,
 }: AddTransactionModalProps) => {
   const isEditing = Boolean(initialTransaction);
 
@@ -74,6 +82,51 @@ export const AddTransactionModal = ({
   const [notes, setNotes] = useState(initialTransaction?.notes || '');
   const [selectedDocId, setSelectedDocId] = useState<string>(initialTransaction?.receiptDocId || '');
   
+  // Voice control state
+  const [showVoiceAssistant, setShowVoiceAssistant] = useState(initialVoiceMode);
+  const [activeFieldMic, setActiveFieldMic] = useState<'title' | 'amount' | null>(null);
+
+  // Field speech recognition for Title & Amount
+  const { isListening: isFieldListening, startListening: startFieldListening, stopListening: stopFieldListening } =
+    useSpeechRecognition({
+      lang: 'bn-BD',
+      onResult: (text, isFinal) => {
+        if (activeFieldMic === 'title') {
+          setTitle(text);
+        } else if (activeFieldMic === 'amount') {
+          const norm = normalizeBengaliNumbers(text);
+          const numMatch = norm.match(/\d+(?:\.\d+)?/);
+          if (numMatch) {
+            setAmount(parseFloat(numMatch[0]));
+          }
+        }
+        if (isFinal) {
+          setActiveFieldMic(null);
+        }
+      },
+      onError: () => {
+        setActiveFieldMic(null);
+      },
+    });
+
+  const toggleFieldMic = (field: 'title' | 'amount') => {
+    if (activeFieldMic === field && isFieldListening) {
+      stopFieldListening();
+      setActiveFieldMic(null);
+    } else {
+      setActiveFieldMic(field);
+      startFieldListening('bn-BD');
+    }
+  };
+
+  const handleApplyVoiceTransaction = (parsed: ParsedVoiceTransaction) => {
+    setType(parsed.type);
+    if (parsed.title) setTitle(parsed.title);
+    if (parsed.amount) setAmount(parsed.amount);
+    if (parsed.category) setCategory(parsed.category);
+    if (parsed.paymentMethod) setPaymentMethod(parsed.paymentMethod);
+  };
+
   // Document upload state
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
@@ -86,6 +139,7 @@ export const AddTransactionModal = ({
   // Sync state whenever modal is opened or initialTransaction / defaultType changes
   useEffect(() => {
     if (isOpen) {
+      setShowVoiceAssistant(initialVoiceMode || false);
       if (initialTransaction) {
         setType(initialTransaction.type);
         setTitle(initialTransaction.title);
@@ -320,12 +374,60 @@ export const AddTransactionModal = ({
           </button>
         </div>
 
+        {/* Voice Input Assistant Toggle Button */}
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={() => setShowVoiceAssistant(!showVoiceAssistant)}
+            className={`w-full py-2 px-3 rounded-2xl border text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              showVoiceAssistant
+                ? 'bg-indigo-900 text-white border-indigo-700 shadow-md'
+                : 'bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 hover:from-indigo-100 hover:to-pink-100 text-indigo-900 border-indigo-200/80 shadow-2xs'
+            }`}
+          >
+            <div className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center shrink-0">
+              <Mic className="w-3 h-3" />
+            </div>
+            <span>
+              {language === 'bn'
+                ? (showVoiceAssistant ? 'ভয়েস ইনপুট প্যানেল বন্ধ করুন' : '🎤 মুখে বলে সহজে হিসাব যোগ করুন (AI Voice Input)')
+                : (showVoiceAssistant ? 'Close Voice Assistant' : '🎤 Speak to Add Transaction (AI Voice)')}
+            </span>
+          </button>
+        </div>
+
+        {/* Embedded Voice Assistant */}
+        {showVoiceAssistant && (
+          <div className="mt-3 animate-in fade-in zoom-in-95 duration-150">
+            <VoiceTransactionAssistant
+              onApply={handleApplyVoiceTransaction}
+              language={language}
+              onClose={() => setShowVoiceAssistant(false)}
+            />
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-3.5 mt-4">
           {/* Title */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              {t.titleLabel}
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-700">
+                {t.titleLabel}
+              </label>
+              <button
+                type="button"
+                onClick={() => toggleFieldMic('title')}
+                className={`flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg border transition-all cursor-pointer ${
+                  activeFieldMic === 'title' && isFieldListening
+                    ? 'bg-rose-500 text-white border-rose-500 animate-pulse'
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200'
+                }`}
+                title="মুখে বলে বিবরণ লিখুন"
+              >
+                <Mic className="w-3 h-3" />
+                <span>{activeFieldMic === 'title' && isFieldListening ? 'শুনছি...' : (language === 'bn' ? 'মুখে বলুন' : 'Voice')}</span>
+              </button>
+            </div>
             <input
               type="text"
               required
@@ -342,14 +444,29 @@ export const AddTransactionModal = ({
               <label className="block text-xs font-semibold text-slate-700">
                 {t.amountLabel}
               </label>
-              {type === 'expense' && dailyExpenseLimit?.enabled && (
-                <span className="text-[11px] text-slate-500 font-medium">
-                  {language === 'bn' ? 'দৈনিক লিমিট:' : 'Daily Limit:'}{' '}
-                  <strong className="text-slate-700 font-mono">
-                    {formatCurrency(dailyExpenseLimit.amount, language)}
-                  </strong>
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => toggleFieldMic('amount')}
+                  className={`flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg border transition-all cursor-pointer ${
+                    activeFieldMic === 'amount' && isFieldListening
+                      ? 'bg-rose-500 text-white border-rose-500 animate-pulse'
+                      : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200'
+                  }`}
+                  title="মুখে বলে টাকা লিখুন"
+                >
+                  <Mic className="w-3 h-3" />
+                  <span>{activeFieldMic === 'amount' && isFieldListening ? 'শুনছি...' : (language === 'bn' ? 'টাকা বলুন' : 'Voice')}</span>
+                </button>
+                {type === 'expense' && dailyExpenseLimit?.enabled && (
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    {language === 'bn' ? 'দৈনিক লিমিট:' : 'Daily Limit:'}{' '}
+                    <strong className="text-slate-700 font-mono">
+                      {formatCurrency(dailyExpenseLimit.amount, language)}
+                    </strong>
+                  </span>
+                )}
+              </div>
             </div>
             <input
               type="number"

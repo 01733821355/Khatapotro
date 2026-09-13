@@ -30,6 +30,7 @@ import {
 import { estimateFoodCalories } from '../services/aiCalorieService';
 import { CameraFoodScannerModal } from './CameraFoodScannerModal';
 import { LiveActivityTracker } from './LiveActivityTracker';
+import { FoodItemSearchBar } from './FoodItemSearchBar';
 import type { 
   Language, 
   CalorieMealLog, 
@@ -748,6 +749,13 @@ export const CalorieMeterPage: React.FC<CalorieMeterPageProps> = ({
           <LiveActivityTracker
             calorieProfile={currentProfile}
             onAddActivityLog={onAddActivityLog}
+            selectedDate={selectedDate}
+            language={language}
+          />
+
+          {/* Direct Food Item Search Bar (খাবার আইটেম সার্চ বার ও এক ক্লিকে যোগ) */}
+          <FoodItemSearchBar
+            onAddMealLog={onAddMealLog}
             selectedDate={selectedDate}
             language={language}
           />
