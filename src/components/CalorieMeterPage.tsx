@@ -23,9 +23,13 @@ import {
   Apple,
   Dumbbell,
   Loader2,
-  Wand2
+  Wand2,
+  Camera,
+  Footprints
 } from 'lucide-react';
 import { estimateFoodCalories } from '../services/aiCalorieService';
+import { CameraFoodScannerModal } from './CameraFoodScannerModal';
+import { LiveActivityTracker } from './LiveActivityTracker';
 import type { 
   Language, 
   CalorieMealLog, 
@@ -123,6 +127,7 @@ export const CalorieMeterPage: React.FC<CalorieMeterPageProps> = ({
   const [activeFoodToLog, setActiveFoodToLog] = useState<CalorieFoodItem | null>(null);
 
   // AI Calorie Auto-Calculation States
+  const [isCameraScannerOpen, setIsCameraScannerOpen] = useState(false);
   const [isAiCalculating, setIsAiCalculating] = useState(false);
   const [aiProtein, setAiProtein] = useState<number>(0);
   const [aiCarbs, setAiCarbs] = useState<number>(0);
@@ -692,19 +697,15 @@ export const CalorieMeterPage: React.FC<CalorieMeterPageProps> = ({
             </div>
           </div>
 
-          {/* Quick Action Buttons: Log Food vs AI Custom Food vs Log Work/Activity */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Quick Action Buttons: Camera AI Scan vs Food Library vs AI Calorie vs Activity */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <button
               type="button"
-              onClick={() => {
-                setCustomFoodMode(false);
-                setIsAddFoodOpen(true);
-                setFoodSearchQuery('');
-              }}
-              className="py-3.5 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-bold rounded-2xl shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 transition-all transform active:scale-98 cursor-pointer text-xs sm:text-sm"
+              onClick={() => setIsCameraScannerOpen(true)}
+              className="py-3 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold rounded-2xl shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all transform active:scale-98 cursor-pointer text-xs sm:text-sm"
             >
-              <Plus className="w-4 h-4 stroke-[2.5]" />
-              <span>{language === 'bn' ? 'খাবার লাইব্রেরি মেনু' : 'Food Library Menu'}</span>
+              <Camera className="w-4 h-4 text-emerald-200" />
+              <span>{language === 'bn' ? '📸 AI ক্যামেরা স্ক্যান' : '📸 AI Camera Scan'}</span>
             </button>
 
             <button
@@ -714,21 +715,42 @@ export const CalorieMeterPage: React.FC<CalorieMeterPageProps> = ({
                 setIsAddFoodOpen(true);
                 setFoodSearchQuery('');
               }}
-              className="py-3.5 px-4 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold rounded-2xl shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 transition-all transform active:scale-98 cursor-pointer text-xs sm:text-sm"
+              className="py-3 px-3 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold rounded-2xl shadow-md shadow-orange-500/20 flex items-center justify-center gap-2 transition-all transform active:scale-98 cursor-pointer text-xs sm:text-sm"
             >
-              <Sparkles className="w-4 h-4 text-amber-200 animate-pulse" />
-              <span>{language === 'bn' ? '✨ AI দিয়ে ক্যালরি বের করুন' : '✨ AI Calorie Calculator'}</span>
+              <Sparkles className="w-4 h-4 text-amber-200" />
+              <span>{language === 'bn' ? '✨ AI দিয়ে ক্যালরি' : '✨ AI Calorie'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setCustomFoodMode(false);
+                setIsAddFoodOpen(true);
+                setFoodSearchQuery('');
+              }}
+              className="py-3 px-3 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 font-bold rounded-2xl shadow-2xs flex items-center justify-center gap-2 transition-all transform active:scale-98 cursor-pointer text-xs sm:text-sm"
+            >
+              <Utensils className="w-4 h-4 text-amber-600" />
+              <span>{language === 'bn' ? 'খাবার মেনু' : 'Food Library'}</span>
             </button>
 
             <button
               type="button"
               onClick={() => setIsAddActivityOpen(true)}
-              className="py-3.5 px-4 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-bold rounded-2xl shadow-md shadow-rose-500/20 flex items-center justify-center gap-2 transition-all transform active:scale-98 cursor-pointer text-xs sm:text-sm"
+              className="py-3 px-3 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-bold rounded-2xl shadow-md shadow-rose-500/20 flex items-center justify-center gap-2 transition-all transform active:scale-98 cursor-pointer text-xs sm:text-sm"
             >
-              <Activity className="w-4 h-4 stroke-[2.5]" />
-              <span>{language === 'bn' ? 'ক্যালরি বার্ন ও কাজ যোগ' : 'Burn & Activity'}</span>
+              <Activity className="w-4 h-4" />
+              <span>{language === 'bn' ? 'ক্যালরি বার্ন যোগ' : 'Burn & Activity'}</span>
             </button>
           </div>
+
+          {/* Live Mobile Step & Smartwatch Activity Tracker */}
+          <LiveActivityTracker
+            calorieProfile={currentProfile}
+            onAddActivityLog={onAddActivityLog}
+            selectedDate={selectedDate}
+            language={language}
+          />
 
           {/* Meals Categorized Section (সকাল, দুপুর, বিকাল, রাত) */}
           <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs space-y-6">
@@ -1222,9 +1244,22 @@ export const CalorieMeterPage: React.FC<CalorieMeterPageProps> = ({
                 <form onSubmit={handleAddCustomFood} className="space-y-4 max-w-md mx-auto py-2">
                   {/* AI Feature Header Banner */}
                   <div className="p-3.5 bg-gradient-to-br from-amber-50 to-orange-50/70 border border-amber-200/80 rounded-2xl">
-                    <div className="flex items-center gap-2 text-amber-900 font-bold text-xs sm:text-sm">
-                      <Sparkles className="w-4 h-4 text-amber-600 animate-pulse" />
-                      <span>{language === 'bn' ? 'AI অটো ক্যালরি ক্যালকুলেটর' : 'AI Smart Calorie Estimator'}</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-amber-900 font-bold text-xs sm:text-sm">
+                        <Sparkles className="w-4 h-4 text-amber-600 animate-pulse" />
+                        <span>{language === 'bn' ? 'AI অটো ক্যালরি ক্যালকুলেটর' : 'AI Smart Calorie Estimator'}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddFoodOpen(false);
+                          setIsCameraScannerOpen(true);
+                        }}
+                        className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>{language === 'bn' ? '📸 ক্যামেরা স্ক্যান' : '📸 Camera Scan'}</span>
+                      </button>
                     </div>
                     <p className="text-[11px] text-amber-800/90 mt-1 leading-relaxed">
                       {language === 'bn'
@@ -1869,6 +1904,15 @@ export const CalorieMeterPage: React.FC<CalorieMeterPageProps> = ({
           </div>
         </div>
       )}
+
+      {/* AI Camera Food Scanner Modal */}
+      <CameraFoodScannerModal
+        isOpen={isCameraScannerOpen}
+        onClose={() => setIsCameraScannerOpen(false)}
+        onAddMealLog={onAddMealLog}
+        selectedDate={selectedDate}
+        language={language}
+      />
     </div>
   );
 };
