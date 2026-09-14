@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import type { Transaction, Language } from '../types';
 import { formatCurrency } from '../utils/formatters';
+import { VoiceInputButton } from './VoiceInputButton';
 import { 
   Search, 
   FileSpreadsheet, 
@@ -312,14 +313,22 @@ export const ReportPage = ({
           </div>
 
           {/* Quick Search */}
-          <div>
+          <div className="relative">
             <input
               type="text"
               placeholder="বিবরণ বা নোট দিয়ে খুঁজুন..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20"
+              className="w-full bg-white border border-slate-200 rounded-xl pl-3 pr-9 py-2 text-xs text-slate-700 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20"
             />
+            <div className="absolute right-2 top-1/2 -translate-y-1/2">
+              <VoiceInputButton
+                inputType="search"
+                contextLabel="প্রতিবেদন ফিল্টার করুন"
+                onTranscript={(val) => setSearchQuery(val)}
+                size="xs"
+              />
+            </div>
           </div>
 
           {/* Action Export Buttons strictly matching screenshot (Excel & PDF buttons) */}

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { UserProfile, Language, GoogleUser } from '../types';
+import { VoiceInputButton } from './VoiceInputButton';
 
 interface FirstTimeRegistrationModalProps {
   isOpen: boolean;
@@ -205,51 +206,111 @@ export const FirstTimeRegistrationModal = ({
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* User Name */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5 text-blue-600" />
-              <span>{t.nameLabel}</span>
-            </label>
-            <input
-              type="text"
-              required
-              placeholder={t.namePlaceholder}
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                if (error) setError(null);
-              }}
-              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white font-medium"
-            />
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-blue-600" />
+                <span>{t.nameLabel}</span>
+              </label>
+              <VoiceInputButton
+                inputType="text"
+                contextLabel="আপনার নাম"
+                onTranscript={(val) => {
+                  setName(val);
+                  if (error) setError(null);
+                }}
+                size="xs"
+              />
+            </div>
+            <div className="relative">
+              <input
+                type="text"
+                required
+                placeholder={t.namePlaceholder}
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (error) setError(null);
+                }}
+                className="w-full pl-3.5 pr-10 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white font-medium"
+              />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                <VoiceInputButton
+                  inputType="text"
+                  contextLabel="নাম"
+                  onTranscript={(val) => {
+                    setName(val);
+                    if (error) setError(null);
+                  }}
+                  size="xs"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Ledger / Business Name */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
-              <Store className="w-3.5 h-3.5 text-indigo-600" />
-              <span>{t.bizLabel}</span>
-            </label>
-            <input
-              type="text"
-              placeholder={t.bizPlaceholder}
-              value={businessName}
-              onChange={(e) => setBusinessName(e.target.value)}
-              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white font-medium"
-            />
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <Store className="w-3.5 h-3.5 text-indigo-600" />
+                <span>{t.bizLabel}</span>
+              </label>
+              <VoiceInputButton
+                inputType="text"
+                contextLabel="খাতার শিরোনাম"
+                onTranscript={(val) => setBusinessName(val)}
+                size="xs"
+              />
+            </div>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder={t.bizPlaceholder}
+                value={businessName}
+                onChange={(e) => setBusinessName(e.target.value)}
+                className="w-full pl-3.5 pr-10 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white font-medium"
+              />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                <VoiceInputButton
+                  inputType="text"
+                  contextLabel="প্রতিষ্ঠানের নাম"
+                  onTranscript={(val) => setBusinessName(val)}
+                  size="xs"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Phone Number */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
-              <Phone className="w-3.5 h-3.5 text-emerald-600" />
-              <span>{t.phoneLabel}</span>
-            </label>
-            <input
-              type="tel"
-              placeholder={t.phonePlaceholder}
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white font-medium"
-            />
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                <span>{t.phoneLabel}</span>
+              </label>
+              <VoiceInputButton
+                inputType="phone"
+                contextLabel="মোবাইল নম্বর"
+                onTranscript={(val) => setPhone(val)}
+                size="xs"
+              />
+            </div>
+            <div className="relative">
+              <input
+                type="tel"
+                placeholder={t.phonePlaceholder}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full pl-3.5 pr-10 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white font-medium"
+              />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                <VoiceInputButton
+                  inputType="phone"
+                  contextLabel="ফোন"
+                  onTranscript={(val) => setPhone(val)}
+                  size="xs"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Opening Balance (Only shown on first-time setup or if explicitly editing) */}
@@ -260,19 +321,35 @@ export const FirstTimeRegistrationModal = ({
                   <Coins className="w-3.5 h-3.5 text-amber-600" />
                   <span>{t.balanceLabel}</span>
                 </label>
-                <span className="text-[10px] text-slate-400">
-                  {t.balanceHelp}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-slate-400">{t.balanceHelp}</span>
+                  <VoiceInputButton
+                    inputType="currency"
+                    contextLabel="প্রারম্ভিক ব্যালেন্স"
+                    onTranscript={(val) => setOpeningBalance(val)}
+                    size="xs"
+                  />
+                </div>
               </div>
-              <input
-                type="number"
-                min="0"
-                step="any"
-                placeholder="0"
-                value={openingBalance}
-                onChange={(e) => setOpeningBalance(e.target.value)}
-                className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white font-mono font-bold"
-              />
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder="0"
+                  value={openingBalance}
+                  onChange={(e) => setOpeningBalance(e.target.value)}
+                  className="w-full pl-3.5 pr-10 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:bg-white font-mono font-bold"
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                  <VoiceInputButton
+                    inputType="currency"
+                    contextLabel="প্রারম্ভিক ব্যালেন্স টাকা"
+                    onTranscript={(val) => setOpeningBalance(val)}
+                    size="xs"
+                  />
+                </div>
+              </div>
             </div>
           )}
 

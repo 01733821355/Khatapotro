@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import type { CloudDocument, DocumentCategory, Language } from '../types';
 import { formatCurrency, formatRelativeDate } from '../utils/formatters';
+import { VoiceInputButton } from './VoiceInputButton';
 
 interface DocumentManagerProps {
   documents: CloudDocument[];
@@ -297,8 +298,16 @@ export const DocumentManager = ({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t.search}
-            className="w-full pl-9 pr-4 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800"
+            className="w-full pl-9 pr-9 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800"
           />
+          <div className="absolute right-2 top-1/2 -translate-y-1/2">
+            <VoiceInputButton
+              inputType="search"
+              contextLabel="ডকুমেন্ট অনুসন্ধান"
+              onTranscript={(val) => setSearch(val)}
+              size="xs"
+            />
+          </div>
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -532,17 +541,35 @@ export const DocumentManager = ({
 
               {/* Title */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  {language === 'bn' ? 'ডকুমেন্টের শিরোনাম *' : 'Document Title *'}
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="যেমন: মেঘনা গ্রুপ সেপ্টেম্বর মেমো"
-                  value={docTitle}
-                  onChange={(e) => setDocTitle(e.target.value)}
-                  className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    {language === 'bn' ? 'ডকুমেন্টের শিরোনাম *' : 'Document Title *'}
+                  </label>
+                  <VoiceInputButton
+                    inputType="text"
+                    contextLabel="ডকুমেন্টের শিরোনাম"
+                    onTranscript={(val) => setDocTitle(val)}
+                    size="xs"
+                  />
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    placeholder="যেমন: মেঘনা গ্রুপ সেপ্টেম্বর মেমো"
+                    value={docTitle}
+                    onChange={(e) => setDocTitle(e.target.value)}
+                    className="w-full pl-3 pr-9 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <VoiceInputButton
+                      inputType="text"
+                      contextLabel="শিরোনাম"
+                      onTranscript={(val) => setDocTitle(val)}
+                      size="xs"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Category */}
@@ -565,31 +592,77 @@ export const DocumentManager = ({
 
               {/* Associated Amount */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  {language === 'bn' ? 'সংযুক্ত টাকার পরিমাণ (যদি থাকে)' : 'Associated Amount (৳) (Optional)'}
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="যেমন: ৭৪১০"
-                  value={docAmount || ''}
-                  onChange={(e) => setDocAmount(parseFloat(e.target.value) || undefined)}
-                  className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    {language === 'bn' ? 'সংযুক্ত টাকার পরিমাণ (যদি থাকে)' : 'Associated Amount (৳) (Optional)'}
+                  </label>
+                  <VoiceInputButton
+                    inputType="currency"
+                    contextLabel="টাকার পরিমাণ"
+                    onTranscript={(val) => {
+                      const num = parseFloat(val);
+                      if (!isNaN(num)) setDocAmount(num);
+                    }}
+                    size="xs"
+                  />
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="যেমন: ৭৪১০"
+                    value={docAmount || ''}
+                    onChange={(e) => setDocAmount(parseFloat(e.target.value) || undefined)}
+                    className="w-full pl-3 pr-9 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <VoiceInputButton
+                      inputType="currency"
+                      contextLabel="টাকার পরিমাণ"
+                      onTranscript={(val) => {
+                        const num = parseFloat(val);
+                        if (!isNaN(num)) setDocAmount(num);
+                      }}
+                      size="xs"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Notes */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  {language === 'bn' ? 'অতিরিক্ত বিবরণ' : 'Notes'}
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="নোট বা চালান নম্বর..."
-                  value={docNotes}
-                  onChange={(e) => setDocNotes(e.target.value)}
-                  className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    {language === 'bn' ? 'অতিরিক্ত বিবরণ' : 'Notes'}
+                  </label>
+                  <VoiceInputButton
+                    inputType="text"
+                    contextLabel="অতিরিক্ত বিবরণ ও মন্তব্য"
+                    currentValue={docNotes}
+                    appendMode={true}
+                    onTranscript={(val) => setDocNotes(val)}
+                    size="xs"
+                  />
+                </div>
+                <div className="relative">
+                  <textarea
+                    rows={2}
+                    placeholder="নোট বা চালান নম্বর..."
+                    value={docNotes}
+                    onChange={(e) => setDocNotes(e.target.value)}
+                    className="w-full pl-3 pr-9 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                  />
+                  <div className="absolute right-2 top-3">
+                    <VoiceInputButton
+                      inputType="text"
+                      contextLabel="বিবরণ"
+                      currentValue={docNotes}
+                      appendMode={true}
+                      onTranscript={(val) => setDocNotes(val)}
+                      size="xs"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Submit Buttons */}

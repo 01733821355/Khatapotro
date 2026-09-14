@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AppState, ChecklistItem, Preset, HistoryItem, WhatsAppTargetApp } from './types';
+import { VoiceInputButton } from '../VoiceInputButton';
 
 interface Props {
   state: AppState;
@@ -504,15 +505,25 @@ export const WhatsAppSender: React.FC<Props> = ({ state, setState }) => {
 
             {/* Add New Item Input */}
             <div className="mt-5 pt-4 border-t border-slate-200 dark:border-slate-700 flex gap-2">
-              <input 
-                ref={itemInputRef} 
-                type="text" 
-                value={newItemInput} 
-                onChange={e => setNewItemInput(e.target.value)} 
-                placeholder={isBn ? 'নতুন আইটেম লিখুন এবং যোগ করুন...' : 'Type a new checklist item...'} 
-                className="flex-1 border border-slate-300 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-purple-500" 
-                onKeyDown={e => e.key === 'Enter' && addNewItemToList()} 
-              />
+              <div className="relative flex-1">
+                <input 
+                  ref={itemInputRef} 
+                  type="text" 
+                  value={newItemInput} 
+                  onChange={e => setNewItemInput(e.target.value)} 
+                  placeholder={isBn ? 'নতুন আইটেম লিখুন এবং যোগ করুন...' : 'Type a new checklist item...'} 
+                  className="w-full border border-slate-300 dark:border-slate-700 rounded-xl p-3 pr-10 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-purple-500" 
+                  onKeyDown={e => e.key === 'Enter' && addNewItemToList()} 
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                  <VoiceInputButton
+                    inputType="text"
+                    contextLabel="আইটেম"
+                    onTranscript={(val) => setNewItemInput(val)}
+                    size="xs"
+                  />
+                </div>
+              </div>
               <button 
                 onClick={addNewItemToList} 
                 className="px-5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-sm shadow-md transition flex items-center gap-1.5 cursor-pointer shrink-0"
@@ -553,56 +564,120 @@ export const WhatsAppSender: React.FC<Props> = ({ state, setState }) => {
 
             {/* Recipient Phone */}
             <div className="space-y-1">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex justify-between">
-                <span>{isBn ? 'প্রাপকের ফোন নম্বর' : 'Phone Number'}</span>
-                <span className="text-purple-600 lowercase">{isBn ? 'দেশ কোডসহ (+880)' : 'with country code'}</span>
-              </label>
+              <div className="flex justify-between items-center">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex justify-between w-full pr-2">
+                  <span>{isBn ? 'প্রাপকের ফোন নম্বর' : 'Phone Number'}</span>
+                  <span className="text-purple-600 lowercase">{isBn ? 'দেশ কোডসহ (+880)' : 'with country code'}</span>
+                </label>
+                <VoiceInputButton
+                  inputType="phone"
+                  contextLabel="ফোন নম্বর"
+                  onTranscript={(val) => {
+                    const clean = val.replace(/\s+/g, '');
+                    if (clean.startsWith('+')) setPhone(clean);
+                    else if (clean.startsWith('880')) setPhone('+' + clean);
+                    else if (clean.startsWith('01')) setPhone('+88' + clean);
+                    else setPhone(clean);
+                  }}
+                  size="xs"
+                />
+              </div>
               <div className="relative">
                 <input 
                   type="tel" 
                   value={phone} 
                   onChange={handlePhoneChange} 
                   placeholder="+8801700000000"
-                  className="w-full border border-slate-300 dark:border-slate-700 rounded-2xl p-3.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono text-base font-bold outline-none focus:ring-2 focus:ring-purple-500" 
+                  className="w-full border border-slate-300 dark:border-slate-700 rounded-2xl p-3.5 pr-16 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-mono text-base font-bold outline-none focus:ring-2 focus:ring-purple-500" 
                 />
-                {phone.length > 4 && (
-                  <button 
-                    onClick={() => setPhone('+880')}
-                    className="absolute right-3 top-3.5 text-xs text-slate-400 hover:text-slate-600 cursor-pointer"
-                    title={isBn ? 'মুছুন' : 'Clear'}
-                  >
-                    <i className="fas fa-times-circle"></i>
-                  </button>
-                )}
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                  {phone.length > 4 && (
+                    <button 
+                      onClick={() => setPhone('+880')}
+                      className="text-xs text-slate-400 hover:text-slate-600 cursor-pointer p-1"
+                      title={isBn ? 'মুছুন' : 'Clear'}
+                    >
+                      <i className="fas fa-times-circle"></i>
+                    </button>
+                  )}
+                  <VoiceInputButton
+                    inputType="phone"
+                    contextLabel="ফোন নম্বর"
+                    onTranscript={(val) => {
+                      const clean = val.replace(/\s+/g, '');
+                      if (clean.startsWith('+')) setPhone(clean);
+                      else if (clean.startsWith('880')) setPhone('+' + clean);
+                      else if (clean.startsWith('01')) setPhone('+88' + clean);
+                      else setPhone(clean);
+                    }}
+                    size="xs"
+                  />
+                </div>
               </div>
             </div>
 
             {/* Subject / Title */}
             <div className="space-y-1">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                {isBn ? 'বার্তার বিষয় / সাবজেক্ট (ঐচ্ছিক)' : 'Subject / Title (Optional)'}
-              </label>
-              <input 
-                type="text" 
-                value={title} 
-                onChange={e => setTitle(e.target.value)} 
-                placeholder={isBn ? 'যেমন: ডেলিভারি কনফার্মেশন' : 'e.g. Order #1043 Confirmation'}
-                className="w-full border border-slate-300 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-purple-500" 
-              />
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  {isBn ? 'বার্তার বিষয় / সাবজেক্ট (ঐচ্ছিক)' : 'Subject / Title (Optional)'}
+                </label>
+                <VoiceInputButton
+                  inputType="text"
+                  contextLabel="বার্তার বিষয়"
+                  onTranscript={(val) => setTitle(val)}
+                  size="xs"
+                />
+              </div>
+              <div className="relative">
+                <input 
+                  type="text" 
+                  value={title} 
+                  onChange={e => setTitle(e.target.value)} 
+                  placeholder={isBn ? 'যেমন: ডেলিভারি কনফার্মেশন' : 'e.g. Order #1043 Confirmation'}
+                  className="w-full border border-slate-300 dark:border-slate-700 rounded-xl p-3 pr-10 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-purple-500" 
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                  <VoiceInputButton
+                    inputType="text"
+                    contextLabel="বিষয়"
+                    onTranscript={(val) => setTitle(val)}
+                    size="xs"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Extra Note */}
             <div className="space-y-1">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                {isBn ? 'অতিরিক্ত মন্তব্য বা নোট (ঐচ্ছিক)' : 'Additional Note (Optional)'}
-              </label>
-              <textarea 
-                rows={2}
-                value={extraNote} 
-                onChange={e => setExtraNote(e.target.value)} 
-                placeholder={isBn ? 'যেমন: আগামীকালের মধ্যে ডেলিভারি দেওয়া হবে।' : 'e.g. Expected delivery by 4 PM tomorrow.'}
-                className="w-full border border-slate-300 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-purple-500 resize-none" 
-              />
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  {isBn ? 'অতিরিক্ত মন্তব্য বা নোট (ঐচ্ছিক)' : 'Additional Note (Optional)'}
+                </label>
+                <VoiceInputButton
+                  inputType="text"
+                  contextLabel="নোট বা মন্তব্য"
+                  onTranscript={(val) => setExtraNote(val)}
+                  size="xs"
+                />
+              </div>
+              <div className="relative">
+                <textarea 
+                  rows={2}
+                  value={extraNote} 
+                  onChange={e => setExtraNote(e.target.value)} 
+                  placeholder={isBn ? 'যেমন: আগামীকালের মধ্যে ডেলিভারি দেওয়া হবে।' : 'e.g. Expected delivery by 4 PM tomorrow.'}
+                  className="w-full border border-slate-300 dark:border-slate-700 rounded-xl p-3 pr-10 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-purple-500 resize-none" 
+                />
+                <div className="absolute right-2 top-3">
+                  <VoiceInputButton
+                    inputType="text"
+                    contextLabel="নোট"
+                    onTranscript={(val) => setExtraNote(val)}
+                    size="xs"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Options Toggles */}

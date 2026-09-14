@@ -1,6 +1,7 @@
 import { useState, useMemo, type FormEvent } from 'react';
 import type { Transaction, Language } from '../types';
 import { formatCurrency } from '../utils/formatters';
+import { VoiceInputButton } from './VoiceInputButton';
 import { 
   HandCoins, 
   Plus, 
@@ -224,8 +225,16 @@ export const LendingPage = ({
           placeholder={language === 'bn' ? 'ব্যক্তির নাম দিয়ে খুঁজুন...' : 'Search by borrower name...'}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20"
+          className="w-full pl-9 pr-10 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20"
         />
+        <div className="absolute right-2 top-1/2 -translate-y-1/2">
+          <VoiceInputButton
+            inputType="search"
+            contextLabel="ধারগ্রহীতা খুঁজুন"
+            onTranscript={(val) => setSearchQuery(val)}
+            size="xs"
+          />
+        </div>
       </div>
 
       {/* List of Borrowers */}
@@ -376,45 +385,109 @@ export const LendingPage = ({
 
             <form onSubmit={handleSubmitModal} className="space-y-3 mt-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  কার নাম / বিবরণ *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="যেমন: কামাল, করিম, বন্ধু"
-                  value={targetPerson}
-                  onChange={(e) => setTargetPerson(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    কার নাম / বিবরণ *
+                  </label>
+                  <VoiceInputButton
+                    inputType="text"
+                    contextLabel="ধারগ্রহীতার নাম"
+                    onTranscript={(val) => setTargetPerson(val)}
+                    size="xs"
+                  />
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    placeholder="যেমন: কামাল, করিম, বন্ধু"
+                    value={targetPerson}
+                    onChange={(e) => setTargetPerson(e.target.value)}
+                    className="w-full pl-3 pr-9 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20"
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <VoiceInputButton
+                      inputType="text"
+                      contextLabel="নাম"
+                      onTranscript={(val) => setTargetPerson(val)}
+                      size="xs"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  টাকার পরিমাণ (৳) *
-                </label>
-                <input
-                  type="number"
-                  required
-                  min="1"
-                  placeholder="0.00"
-                  value={amountInput}
-                  onChange={(e) => setAmountInput(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                  className="w-full px-3 py-2 text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    টাকার পরিমাণ (৳) *
+                  </label>
+                  <VoiceInputButton
+                    inputType="currency"
+                    contextLabel="টাকার পরিমাণ"
+                    onTranscript={(val) => {
+                      const num = parseFloat(val);
+                      if (!isNaN(num) && num > 0) setAmountInput(num);
+                    }}
+                    size="xs"
+                  />
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    placeholder="0.00"
+                    value={amountInput}
+                    onChange={(e) => setAmountInput(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    className="w-full pl-3 pr-9 py-2 text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20"
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <VoiceInputButton
+                      inputType="currency"
+                      contextLabel="টাকা"
+                      onTranscript={(val) => {
+                        const num = parseFloat(val);
+                        if (!isNaN(num) && num > 0) setAmountInput(num);
+                      }}
+                      size="xs"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  নোট (ঐচ্ছিক)
-                </label>
-                <input
-                  type="text"
-                  placeholder="উদ্দেশ্য বা ফেরতের সময়সীমা..."
-                  value={notesInput}
-                  onChange={(e) => setNotesInput(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    নোট (ঐচ্ছিক)
+                  </label>
+                  <VoiceInputButton
+                    inputType="text"
+                    contextLabel="নোট বা ফেরতের সময়সীমা"
+                    currentValue={notesInput}
+                    appendMode={true}
+                    onTranscript={(val) => setNotesInput(val)}
+                    size="xs"
+                  />
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="উদ্দেশ্য বা ফেরতের সময়সীমা..."
+                    value={notesInput}
+                    onChange={(e) => setNotesInput(e.target.value)}
+                    className="w-full pl-3 pr-9 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20"
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <VoiceInputButton
+                      inputType="text"
+                      contextLabel="নোট"
+                      currentValue={notesInput}
+                      appendMode={true}
+                      onTranscript={(val) => setNotesInput(val)}
+                      size="xs"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">

@@ -20,6 +20,7 @@ import {
   Edit3
 } from 'lucide-react';
 import type { SheetConfig, Language, UserProfile, GoogleUser } from '../types';
+import { VoiceInputButton } from './VoiceInputButton';
 
 interface GoogleSheetSyncModalProps {
   isOpen: boolean;
@@ -396,13 +397,23 @@ export const GoogleSheetSyncModal = ({
                 {t.orUseExisting}
               </label>
               <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  placeholder="https://docs.google.com/spreadsheets/d/... অথবা স্প্রেডশিট আইডি"
-                  value={customSheetId}
-                  onChange={(e) => setCustomSheetId(e.target.value)}
-                  className="flex-1 px-3 py-2 text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                />
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    placeholder="https://docs.google.com/spreadsheets/d/... অথবা স্প্রেডশিট আইডি"
+                    value={customSheetId}
+                    onChange={(e) => setCustomSheetId(e.target.value)}
+                    className="w-full pl-3 pr-9 py-2 text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <VoiceInputButton
+                      inputType="text"
+                      contextLabel="স্প্রেডশিট আইডি"
+                      onTranscript={(val) => setCustomSheetId(val)}
+                      size="xs"
+                    />
+                  </div>
+                </div>
                 <button
                   type="submit"
                   className="px-3 py-2 rounded-xl bg-slate-800 text-white text-xs font-bold hover:bg-slate-900 transition-colors"

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { Transaction, TransactionType, Language } from '../types';
 import { formatCurrency } from '../utils/formatters';
+import { VoiceInputButton } from './VoiceInputButton';
 
 interface TransactionsLedgerModalProps {
   isOpen: boolean;
@@ -293,17 +294,25 @@ export const TransactionsLedgerModal = ({
                 placeholder={t.searchPlaceholder}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-9 pr-16 py-2 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
               />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="p-1 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <VoiceInputButton
+                  inputType="search"
+                  contextLabel="লেনদেন খুঁজুন"
+                  onTranscript={(val) => setSearchQuery(val)}
+                  size="xs"
+                />
+              </div>
             </div>
 
             {/* Month select */}

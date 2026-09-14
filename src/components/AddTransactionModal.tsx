@@ -28,6 +28,7 @@ import type {
 } from '../types';
 import { formatCurrency } from '../utils/formatters';
 import { VoiceTransactionAssistant } from './VoiceTransactionAssistant';
+import { VoiceInputButton } from './VoiceInputButton';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { normalizeBengaliNumbers, type ParsedVoiceTransaction } from '../utils/voiceTransactionParser';
 
@@ -414,28 +415,46 @@ export const AddTransactionModal = ({
               <label className="block text-xs font-semibold text-slate-700">
                 {t.titleLabel}
               </label>
-              <button
-                type="button"
-                onClick={() => toggleFieldMic('title')}
-                className={`flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg border transition-all cursor-pointer ${
-                  activeFieldMic === 'title' && isFieldListening
-                    ? 'bg-rose-500 text-white border-rose-500 animate-pulse'
-                    : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200'
-                }`}
-                title="মুখে বলে বিবরণ লিখুন"
-              >
-                <Mic className="w-3 h-3" />
-                <span>{activeFieldMic === 'title' && isFieldListening ? 'শুনছি...' : (language === 'bn' ? 'মুখে বলুন' : 'Voice')}</span>
-              </button>
+              <div className="flex items-center gap-1.5">
+                <VoiceInputButton
+                  inputType="text"
+                  contextLabel="বিবরণ"
+                  onTranscript={(val) => setTitle(val)}
+                  size="xs"
+                />
+                <button
+                  type="button"
+                  onClick={() => toggleFieldMic('title')}
+                  className={`flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-lg border transition-all cursor-pointer ${
+                    activeFieldMic === 'title' && isFieldListening
+                      ? 'bg-rose-500 text-white border-rose-500 animate-pulse'
+                      : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200'
+                  }`}
+                  title="মুখে বলে বিবরণ লিখুন"
+                >
+                  <Mic className="w-3 h-3" />
+                  <span>{activeFieldMic === 'title' && isFieldListening ? 'শুনছি...' : (language === 'bn' ? 'মুখে বলুন' : 'Voice')}</span>
+                </button>
+              </div>
             </div>
-            <input
-              type="text"
-              required
-              placeholder={t.titlePlaceholder}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                required
+                placeholder={t.titlePlaceholder}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full pl-3 pr-9 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                <VoiceInputButton
+                  inputType="text"
+                  contextLabel="বিবরণ"
+                  onTranscript={(val) => setTitle(val)}
+                  size="xs"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Amount */}
@@ -445,6 +464,17 @@ export const AddTransactionModal = ({
                 {t.amountLabel}
               </label>
               <div className="flex items-center gap-2">
+                <VoiceInputButton
+                  inputType="currency"
+                  contextLabel="টাকার পরিমাণ"
+                  onTranscript={(val) => {
+                    const parsed = parseFloat(val);
+                    if (!isNaN(parsed) && parsed > 0) {
+                      setAmount(parsed);
+                    }
+                  }}
+                  size="xs"
+                />
                 <button
                   type="button"
                   onClick={() => toggleFieldMic('amount')}
@@ -468,15 +498,30 @@ export const AddTransactionModal = ({
                 )}
               </div>
             </div>
-            <input
-              type="number"
-              required
-              min="1"
-              placeholder="0.00"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value === '' ? '' : parseFloat(e.target.value))}
-              className="w-full px-3 py-2 text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-            />
+            <div className="relative">
+              <input
+                type="number"
+                required
+                min="1"
+                placeholder="0.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                className="w-full pl-3 pr-9 py-2 text-sm font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                <VoiceInputButton
+                  inputType="currency"
+                  contextLabel="টাকার পরিমাণ"
+                  onTranscript={(val) => {
+                    const parsed = parseFloat(val);
+                    if (!isNaN(parsed) && parsed > 0) {
+                      setAmount(parsed);
+                    }
+                  }}
+                  size="xs"
+                />
+              </div>
+            </div>
 
             {/* Warning if adding this expense exceeds daily limit */}
             {type === 'expense' &&
@@ -693,16 +738,38 @@ export const AddTransactionModal = ({
 
           {/* Notes */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              {t.notesLabel}
-            </label>
-            <input
-              type="text"
-              placeholder="অতিরিক্ত কোনো তথ্য বা মন্তব্য..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-            />
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-700">
+                {t.notesLabel}
+              </label>
+              <VoiceInputButton
+                inputType="text"
+                contextLabel="নোট ও মন্তব্য"
+                currentValue={notes}
+                appendMode={true}
+                onTranscript={(val) => setNotes(val)}
+                size="xs"
+              />
+            </div>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="অতিরিক্ত কোনো তথ্য বা মন্তব্য..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="w-full pl-3 pr-9 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                <VoiceInputButton
+                  inputType="text"
+                  contextLabel="নোট"
+                  currentValue={notes}
+                  appendMode={true}
+                  onTranscript={(val) => setNotes(val)}
+                  size="xs"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Actions */}

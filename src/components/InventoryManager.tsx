@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { InventoryItem, InventoryLog, Language, MovementType } from '../types';
 import { formatCurrency, formatNumber, formatRelativeDate } from '../utils/formatters';
+import { VoiceInputButton } from './VoiceInputButton';
 
 interface InventoryManagerProps {
   items: InventoryItem[];
@@ -311,8 +312,16 @@ export const InventoryManager = ({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t.search}
-                className="w-full pl-9 pr-4 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-800"
+                className="w-full pl-9 pr-9 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-slate-800"
               />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                <VoiceInputButton
+                  inputType="search"
+                  contextLabel="পণ্য বা স্টক খুঁজুন"
+                  onTranscript={(val) => setSearch(val)}
+                  size="xs"
+                />
+              </div>
             </div>
 
             {/* Category Filter */}
@@ -568,63 +577,147 @@ export const InventoryManager = ({
 
             <form onSubmit={handleSaveStockMove} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  {language === 'bn' ? 'পরিমাণ' : 'Quantity'} ({stockMoveItem.item.unit})
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max={stockMoveItem.type !== 'stock_in' ? stockMoveItem.item.quantity : 99999}
-                  required
-                  value={moveQuantity}
-                  onChange={(e) => setMoveQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    {language === 'bn' ? 'পরিমাণ' : 'Quantity'} ({stockMoveItem.item.unit})
+                  </label>
+                  <VoiceInputButton
+                    inputType="number"
+                    contextLabel="পরিমাণ"
+                    onTranscript={(val) => {
+                      const num = parseInt(val, 10);
+                      if (!isNaN(num) && num > 0) setMoveQuantity(num);
+                    }}
+                    size="xs"
+                  />
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="1"
+                    max={stockMoveItem.type !== 'stock_in' ? stockMoveItem.item.quantity : 99999}
+                    required
+                    value={moveQuantity}
+                    onChange={(e) => setMoveQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-full pl-3 pr-9 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <VoiceInputButton
+                      inputType="number"
+                      contextLabel="পরিমাণ"
+                      onTranscript={(val) => {
+                        const num = parseInt(val, 10);
+                        if (!isNaN(num) && num > 0) setMoveQuantity(num);
+                      }}
+                      size="xs"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  {stockMoveItem.type === 'stock_in'
-                    ? language === 'bn'
-                      ? 'প্রতি একক ক্রয় মূল্য (৳)'
-                      : 'Unit Cost Price (৳)'
-                    : language === 'bn'
-                    ? 'প্রতি একক বিক্রয় মূল্য (৳)'
-                    : 'Unit Selling Price (৳)'}
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  required
-                  value={moveUnitPrice}
-                  onChange={(e) => setMoveUnitPrice(Math.max(0, parseFloat(e.target.value) || 0))}
-                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    {stockMoveItem.type === 'stock_in'
+                      ? language === 'bn'
+                        ? 'প্রতি একক ক্রয় মূল্য (৳)'
+                        : 'Unit Cost Price (৳)'
+                      : language === 'bn'
+                      ? 'প্রতি একক বিক্রয় মূল্য (৳)'
+                      : 'Unit Selling Price (৳)'}
+                  </label>
+                  <VoiceInputButton
+                    inputType="currency"
+                    contextLabel="মূল্য"
+                    onTranscript={(val) => {
+                      const num = parseFloat(val);
+                      if (!isNaN(num) && num >= 0) setMoveUnitPrice(num);
+                    }}
+                    size="xs"
+                  />
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    required
+                    value={moveUnitPrice}
+                    onChange={(e) => setMoveUnitPrice(Math.max(0, parseFloat(e.target.value) || 0))}
+                    className="w-full pl-3 pr-9 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <VoiceInputButton
+                      inputType="currency"
+                      contextLabel="মূল্য"
+                      onTranscript={(val) => {
+                        const num = parseFloat(val);
+                        if (!isNaN(num) && num >= 0) setMoveUnitPrice(num);
+                      }}
+                      size="xs"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  {language === 'bn' ? 'কারণ / বিবরণ' : 'Reason / Note'}
-                </label>
-                <input
-                  type="text"
-                  value={moveReason}
-                  onChange={(e) => setMoveReason(e.target.value)}
-                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    {language === 'bn' ? 'কারণ / বিবরণ' : 'Reason / Note'}
+                  </label>
+                  <VoiceInputButton
+                    inputType="text"
+                    contextLabel="কারণ বা বিবরণ"
+                    onTranscript={(val) => setMoveReason(val)}
+                    size="xs"
+                  />
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={moveReason}
+                    onChange={(e) => setMoveReason(e.target.value)}
+                    className="w-full pl-3 pr-9 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <VoiceInputButton
+                      inputType="text"
+                      contextLabel="কারণ"
+                      onTranscript={(val) => setMoveReason(val)}
+                      size="xs"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  {language === 'bn' ? 'রেফারেন্স / চালান নং' : 'Reference / Invoice #'}
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. INV-902 or Memo #4"
-                  value={moveReference}
-                  onChange={(e) => setMoveReference(e.target.value)}
-                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    {language === 'bn' ? 'রেফারেন্স / চালান নং' : 'Reference / Invoice #'}
+                  </label>
+                  <VoiceInputButton
+                    inputType="text"
+                    contextLabel="চালান নম্বর"
+                    onTranscript={(val) => setMoveReference(val)}
+                    size="xs"
+                  />
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="e.g. INV-902 or Memo #4"
+                    value={moveReference}
+                    onChange={(e) => setMoveReference(e.target.value)}
+                    className="w-full pl-3 pr-9 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <VoiceInputButton
+                      inputType="text"
+                      contextLabel="রেফারেন্স"
+                      onTranscript={(val) => setMoveReference(val)}
+                      size="xs"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Checkbox to auto-sync to Ledger */}
@@ -689,43 +782,97 @@ export const InventoryManager = ({
             <form onSubmit={handleCreateNewItem} className="space-y-3.5">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    {language === 'bn' ? 'পণ্যের নাম *' : 'Item Name *'}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="যেমন: মিনিকেট চাল ২৫ কেজি"
-                    value={newItemName}
-                    onChange={(e) => setNewItemName(e.target.value)}
-                    className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      {language === 'bn' ? 'পণ্যের নাম *' : 'Item Name *'}
+                    </label>
+                    <VoiceInputButton
+                      inputType="text"
+                      contextLabel="পণ্যের নাম"
+                      onTranscript={(val) => setNewItemName(val)}
+                      size="xs"
+                    />
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      placeholder="যেমন: মিনিকেট চাল ২৫ কেজি"
+                      value={newItemName}
+                      onChange={(e) => setNewItemName(e.target.value)}
+                      className="w-full pl-3 pr-9 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                      <VoiceInputButton
+                        inputType="text"
+                        contextLabel="পণ্য"
+                        onTranscript={(val) => setNewItemName(val)}
+                        size="xs"
+                      />
+                    </div>
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    SKU Code
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="যেমন: RIC-MIN-25"
-                    value={newItemSku}
-                    onChange={(e) => setNewItemSku(e.target.value)}
-                    className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-mono"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      SKU Code
+                    </label>
+                    <VoiceInputButton
+                      inputType="text"
+                      contextLabel="কোড"
+                      onTranscript={(val) => setNewItemSku(val)}
+                      size="xs"
+                    />
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="যেমন: RIC-MIN-25"
+                      value={newItemSku}
+                      onChange={(e) => setNewItemSku(e.target.value)}
+                      className="w-full pl-3 pr-9 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-mono"
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                      <VoiceInputButton
+                        inputType="text"
+                        contextLabel="কোড"
+                        onTranscript={(val) => setNewItemSku(val)}
+                        size="xs"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    {language === 'bn' ? 'ক্যাটাগরি' : 'Category'}
-                  </label>
-                  <input
-                    type="text"
-                    value={newItemCategory}
-                    onChange={(e) => setNewItemCategory(e.target.value)}
-                    className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      {language === 'bn' ? 'ক্যাটাগরি' : 'Category'}
+                    </label>
+                    <VoiceInputButton
+                      inputType="text"
+                      contextLabel="ক্যাটাগরি"
+                      onTranscript={(val) => setNewItemCategory(val)}
+                      size="xs"
+                    />
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={newItemCategory}
+                      onChange={(e) => setNewItemCategory(e.target.value)}
+                      className="w-full pl-3 pr-9 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                      <VoiceInputButton
+                        inputType="text"
+                        contextLabel="ক্যাটাগরি"
+                        onTranscript={(val) => setNewItemCategory(val)}
+                        size="xs"
+                      />
+                    </div>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -749,43 +896,115 @@ export const InventoryManager = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    {language === 'bn' ? 'ক্রয় মূল্য (৳)' : 'Cost Price (৳)'}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={newItemCost}
-                    onChange={(e) => setNewItemCost(parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      {language === 'bn' ? 'ক্রয় মূল্য (৳)' : 'Cost Price (৳)'}
+                    </label>
+                    <VoiceInputButton
+                      inputType="currency"
+                      contextLabel="ক্রয় মূল্য"
+                      onTranscript={(val) => {
+                        const num = parseFloat(val);
+                        if (!isNaN(num) && num >= 0) setNewItemCost(num);
+                      }}
+                      size="xs"
+                    />
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      value={newItemCost}
+                      onChange={(e) => setNewItemCost(parseFloat(e.target.value) || 0)}
+                      className="w-full pl-3 pr-9 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                      <VoiceInputButton
+                        inputType="currency"
+                        contextLabel="ক্রয়"
+                        onTranscript={(val) => {
+                          const num = parseFloat(val);
+                          if (!isNaN(num) && num >= 0) setNewItemCost(num);
+                        }}
+                        size="xs"
+                      />
+                    </div>
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    {language === 'bn' ? 'বিক্রয় মূল্য (৳)' : 'Selling Price (৳)'}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={newItemSell}
-                    onChange={(e) => setNewItemSell(parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      {language === 'bn' ? 'বিক্রয় মূল্য (৳)' : 'Selling Price (৳)'}
+                    </label>
+                    <VoiceInputButton
+                      inputType="currency"
+                      contextLabel="বিক্রয় মূল্য"
+                      onTranscript={(val) => {
+                        const num = parseFloat(val);
+                        if (!isNaN(num) && num >= 0) setNewItemSell(num);
+                      }}
+                      size="xs"
+                    />
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      value={newItemSell}
+                      onChange={(e) => setNewItemSell(parseFloat(e.target.value) || 0)}
+                      className="w-full pl-3 pr-9 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                      <VoiceInputButton
+                        inputType="currency"
+                        contextLabel="বিক্রয়"
+                        onTranscript={(val) => {
+                          const num = parseFloat(val);
+                          if (!isNaN(num) && num >= 0) setNewItemSell(num);
+                        }}
+                        size="xs"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    {language === 'bn' ? 'প্রাথমিক মজুদ পরিমাণ' : 'Initial Stock Quantity'}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={newItemQty}
-                    onChange={(e) => setNewItemQty(parseInt(e.target.value) || 0)}
-                    className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      {language === 'bn' ? 'প্রাথমিক মজুদ পরিমাণ' : 'Initial Stock Quantity'}
+                    </label>
+                    <VoiceInputButton
+                      inputType="number"
+                      contextLabel="মজুদ পরিমাণ"
+                      onTranscript={(val) => {
+                        const num = parseInt(val, 10);
+                        if (!isNaN(num) && num >= 0) setNewItemQty(num);
+                      }}
+                      size="xs"
+                    />
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      value={newItemQty}
+                      onChange={(e) => setNewItemQty(parseInt(e.target.value) || 0)}
+                      className="w-full pl-3 pr-9 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                      <VoiceInputButton
+                        inputType="number"
+                        contextLabel="মজুদ"
+                        onTranscript={(val) => {
+                          const num = parseInt(val, 10);
+                          if (!isNaN(num) && num >= 0) setNewItemQty(num);
+                        }}
+                        size="xs"
+                      />
+                    </div>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -802,16 +1021,34 @@ export const InventoryManager = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  {language === 'bn' ? 'সাপ্লায়ার / উৎস' : 'Supplier / Source'}
-                </label>
-                <input
-                  type="text"
-                  placeholder="যেমন: মেঘনা গ্রুপ বা স্থানীয় ডিলার"
-                  value={newItemSupplier}
-                  onChange={(e) => setNewItemSupplier(e.target.value)}
-                  className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    {language === 'bn' ? 'সাপ্লায়ার / উৎস' : 'Supplier / Source'}
+                  </label>
+                  <VoiceInputButton
+                    inputType="text"
+                    contextLabel="সাপ্লায়ারের নাম"
+                    onTranscript={(val) => setNewItemSupplier(val)}
+                    size="xs"
+                  />
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="যেমন: মেঘনা গ্রুপ বা স্থানীয় ডিলার"
+                    value={newItemSupplier}
+                    onChange={(e) => setNewItemSupplier(e.target.value)}
+                    className="w-full pl-3 pr-9 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                    <VoiceInputButton
+                      inputType="text"
+                      contextLabel="উৎস"
+                      onTranscript={(val) => setNewItemSupplier(val)}
+                      size="xs"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
